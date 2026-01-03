@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { Link } from "react-router-dom";
-import { authAPI } from "../services/api";
-import { Box, ArrowLeft, Mail, Send, CheckCircle2, Info } from "lucide-react";
+import { authAPI } from "../Services/api";
+import { ArrowLeft, Mail, Send, CheckCircle2, Info } from "lucide-react";
 import "../Styles/auth.css";
 
 const ForgotPasswordPage = () => {
@@ -93,8 +93,8 @@ const ForgotPasswordPage = () => {
         <div className="auth-card animate-slide-up">
           {/* Header Section */}
           <div className="auth-header">
-            <div className="auth-icon-wrapper">
-              <Mail size={32} strokeWidth={2} />
+            <div className="auth-logo-card">
+              <span>DF</span>
             </div>
             <h1 className="auth-title">Forgot Password?</h1>
             <p className="auth-subtitle">
@@ -142,13 +142,12 @@ const ForgotPasswordPage = () => {
           <form onSubmit={handleSubmit} className="auth-form">
             {/* Email Input */}
             <div
-              className={`form-group ${
-                errors.email
-                  ? "has-error"
-                  : email && !errors.email && touched
+              className={`form-group ${errors.email
+                ? "has-error"
+                : email && !errors.email && touched
                   ? "is-valid"
                   : ""
-              }`}
+                }`}
             >
               <label htmlFor="email" className="form-label">
                 <Mail size={16} />
@@ -208,9 +207,9 @@ const ForgotPasswordPage = () => {
 
             {/* Back to Login */}
             <div className="auth-footer">
-              <Link to="/login" className="back-to-login-link">
-                <ArrowLeft size={18} />
-                <span>Back to Login</span>
+              <p>Remember your password?</p>
+              <Link to="/login" className="auth-link">
+                Back to Login
               </Link>
             </div>
           </form>

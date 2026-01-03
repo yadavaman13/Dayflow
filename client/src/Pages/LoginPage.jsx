@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { authAPI } from '../Services/api';
-import { Box } from 'lucide-react';
+import { CalendarDays } from 'lucide-react';
 import '../Styles/auth.css';
 
 const LoginPage = () => {
@@ -121,37 +121,16 @@ const LoginPage = () => {
                 <div className="auth-shape auth-shape-3"></div>
             </div>
 
-            {/* Navbar */}
-            <nav className="auth-navbar">
-                <Link to="/" className="auth-logo">
-                    <div className="logo-icon">
-                        <Box size={24} />
-                    </div>
-                    <span className="logo-text">RentFlow</span>
-                </Link>
-                <Link to="/" className="home-btn">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                        <path d="M3 9L12 2L21 9V20C21 20.5304 20.7893 21.0391 20.4142 21.4142C20.0391 21.7893 19.5304 22 19 22H5C4.46957 22 3.96086 21.7893 3.58579 21.4142C3.21071 21.0391 3 20.5304 3 20V9Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                        <path d="M9 22V12H15V22" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                    </svg>
-                    Home
-                </Link>
-            </nav>
-
             {/* Main Content */}
             <div className="auth-container">
                 <div className="auth-card animate-slide-up">
                     {/* Card Header */}
                     <div className="auth-header">
-                        <div className="auth-icon-wrapper">
-                            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                <path d="M15 3H19C19.5304 3 20.0391 3.21071 20.4142 3.58579C20.7893 3.96086 21 4.46957 21 5V19C21 19.5304 20.7893 20.0391 20.4142 20.4142C20.0391 20.7893 19.5304 21 19 21H15" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                                <path d="M10 17L15 12L10 7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                                <path d="M15 12H3" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                            </svg>
+                        <div className="auth-logo-card">
+                            <span>DF</span>
                         </div>
-                        <h1 className="auth-title">Welcome Back</h1>
-                        <p className="auth-subtitle">Sign in to continue to your dashboard</p>
+                        <h1 className="auth-title">Welcome Back!</h1>
+                        <p className="auth-subtitle">Sign in to access your dashboard and manage your day</p>
                     </div>
 
                     {/* Form */}

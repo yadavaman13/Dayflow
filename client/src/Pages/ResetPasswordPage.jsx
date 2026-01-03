@@ -1,6 +1,6 @@
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { authAPI } from "../services/api";
+import { authAPI } from "../Services/api";
 import {
   Lock,
   Eye,
@@ -9,6 +9,8 @@ import {
   Info,
   KeyRound,
   Shield,
+  Check,
+  X,
 } from "lucide-react";
 import "../Styles/auth.css";
 
@@ -26,10 +28,24 @@ const ResetPasswordPage = () => {
   const [touched, setTouched] = useState({});
   const [successMessage, setSuccessMessage] = useState("");
 
+  // Password strength requirements
+  const passwordRequirements = useMemo(() => {
+    const password = formData.password;
+    return [
+      { label: "At least 8 characters", met: password.length >= 8 },
+      { label: "One uppercase letter", met: /[A-Z]/.test(password) },
+      { label: "One lowercase letter", met: /[a-z]/.test(password) },
+      { label: "One number", met: /[0-9]/.test(password) },
+      { label: "One special character", met: /[!@#$%^&*(),.?":{}|<>]/.test(password) },
+    ];
+  }, [formData.password]);
+
+  const allRequirementsMet = passwordRequirements.every((req) => req.met);
+
   // Validation functions
   const validatePassword = (password) => {
     if (!password) return "Password is required";
-    if (password.length < 6) return "Password must be at least 6 characters";
+    if (!allRequirementsMet) return "Password doesn't meet all requirements";
     return "";
   };
 
@@ -153,8 +169,8 @@ const ResetPasswordPage = () => {
         <div className="auth-card animate-slide-up">
           {/* Header Section */}
           <div className="auth-header">
-            <div className="auth-icon-wrapper">
-              <Shield size={32} strokeWidth={2} />
+            <div className="auth-logo-card">
+              <span>DF</span>
             </div>
             <h1 className="auth-title">Create New Password</h1>
             <p className="auth-subtitle">
@@ -188,13 +204,12 @@ const ResetPasswordPage = () => {
           <form onSubmit={handleSubmit} className="auth-form">
             {/* Password Input */}
             <div
-              className={`form-group ${
-                errors.password && touched.password
-                  ? "has-error"
-                  : formData.password && !errors.password && touched.password
+              className={`form-group ${errors.password && touched.password
+                ? "has-error"
+                : formData.password && !errors.password && touched.password
                   ? "is-valid"
                   : ""
-              }`}
+                }`}
             >
               <label htmlFor="password" className="form-label">
                 <KeyRound size={16} />
@@ -224,25 +239,37 @@ const ResetPasswordPage = () => {
                   {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
                 </button>
               </div>
-              {errors.password && touched.password && (
-                <span className="form-error">
-                  <Info size={14} />
-                  {errors.password}
-                </span>
+
+              {/* Password Requirements Checklist */}
+              {formData.password && (
+                <div className="password-requirements">
+                  {passwordRequirements.map((req, index) => (
+                    <div
+                      key={index}
+                      className={`requirement-item ${req.met ? "met" : "unmet"}`}
+                    >
+                      {req.met ? (
+                        <Check size={14} className="requirement-icon" />
+                      ) : (
+                        <X size={14} className="requirement-icon" />
+                      )}
+                      <span>{req.label}</span>
+                    </div>
+                  ))}
+                </div>
               )}
             </div>
 
             {/* Confirm Password Input */}
             <div
-              className={`form-group ${
-                errors.confirmPassword && touched.confirmPassword
-                  ? "has-error"
-                  : formData.confirmPassword &&
-                    !errors.confirmPassword &&
-                    touched.confirmPassword
+              className={`form-group ${errors.confirmPassword && touched.confirmPassword
+                ? "has-error"
+                : formData.confirmPassword &&
+                  !errors.confirmPassword &&
+                  touched.confirmPassword
                   ? "is-valid"
                   : ""
-              }`}
+                }`}
             >
               <label htmlFor="confirmPassword" className="form-label">
                 <Lock size={16} />
