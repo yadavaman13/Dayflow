@@ -1,6 +1,7 @@
 // src/pages/Employees.jsx
 import { useState, useEffect, useRef } from "react";
-import { employees, departments } from "../data/hrms.js";
+import { useNavigate } from "react-router-dom";
+import { userAPI, departmentAPI } from "../services/api";
 
 function EmployeeCard({ employee, onClick }) {
   // Determine status indicator
@@ -72,9 +73,12 @@ function EmployeeCard({ employee, onClick }) {
         {/* Employee Info */}
         <div className="text-center w-full">
           <h3 className="text-base font-semibold text-gray-900 mb-1">
-            {employee.first_name} {employee.last_name}
+            {employee.full_name || `${employee.first_name} ${employee.last_name}`}
           </h3>
-          <p className="text-xs text-gray-500">{employee.email}</p>
+          <p className="text-xs text-gray-500 mb-1">{employee.email}</p>
+          {employee.employee_id && (
+            <p className="text-xs text-gray-400 font-mono">ID: {employee.employee_id}</p>
+          )}
         </div>
       </div>
     </div>
@@ -164,19 +168,11 @@ function EmployeeModal({ employee, onClose }) {
             />
             <DetailItem
               label="Company Name"
-              value={employee.company_name || "N/A"}
+              value="ODOO India"
             />
             <DetailItem label="Phone" value={employee.phone || "N/A"} />
             <DetailItem label="Role" value={employee.role || "N/A"} />
             <DetailItem label="Status" value={employee.status || "Active"} />
-            <DetailItem
-              label="Profile Completion"
-              value={
-                employee.profile_completion
-                  ? `${employee.profile_completion}%`
-                  : "N/A"
-              }
-            />
             <DetailItem
               label="Join Date"
               value={formatDate(employee.created_at)}
@@ -235,12 +231,111 @@ function DetailItem({ label, value }) {
 }
 
 export default function Employees() {
+  const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState("");
   const [showFilter, setShowFilter] = useState(false);
   const [departmentFilter, setDepartmentFilter] = useState("all");
   const [attendanceFilter, setAttendanceFilter] = useState("all");
   const [selectedEmployee, setSelectedEmployee] = useState(null);
   const filterRef = useRef(null);
+  
+  // State for API data
+  const [employees, setEmployees] = useState([]);
+  const [departments, setDepartments] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  // Fetch employees and departments from API
+  useEffect(() => {
+    const fetchData = async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        console.log('Fetching employees from API...');
+        
+        // Fetch users (employees) - filter only EMPLOYEE role
+        const usersResponse = await userAPI.getAllUsers({ limit: 100 });
+        console.log('API Response:', usersResponse.data);
+        
+        // Filter only EMPLOYEE role users (case-insensitive to handle both uppercase and lowercase)
+        const employeeUsers = usersResponse.data.data.filter(user => user.role?.toUpperCase() === 'EMPLOYEE');
+        console.log('Filtered EMPLOYEE role users:', employeeUsers);
+        
+        // Map users to employee format
+        const mappedEmployees = employeeUsers.map(user => ({
+          id: user.id,
+          employee_id: user.employee_id || `EMP${String(user.id).padStart(4, '0')}`,
+          first_name: user.name?.split(' ')[0] || user.name || 'Unknown',
+          last_name: user.name?.split(' ').slice(1).join(' ') || user.full_name?.split(' ').slice(1).join(' ') || '',
+          full_name: user.full_name || user.name,
+          email: user.email,
+          phone_number: user.phone || 'N/A',
+          address: 'N/A',
+          date_of_birth: 'N/A',
+          date_of_joining: user.joining_year ? `${user.joining_year}-01-01` : 'N/A',
+          department_id: null,
+          role: user.role,
+          role_id: user.role === 'ADMIN' ? 3 : user.role === 'HR' ? 2 : 1,
+          status: user.status === 'ACTIVE' ? 'active' : 'inactive',
+          attendance_status: 'present',
+          created_at: user.created_at,
+          updated_at: user.updated_at,
+        }));
+        
+        console.log('Mapped employees:', mappedEmployees);
+        setEmployees(mappedEmployees);
+        
+        // Fetch departments
+        try {
+          const deptResponse = await departmentAPI.getAllDepartments({ limit: 50 });
+          const mappedDepts = deptResponse.data.data.map(dept => ({
+            department_id: dept.id,
+            department_name: dept.name,
+            manager_id: dept.head_employee_id
+          }));
+          setDepartments(mappedDepts);
+        } catch (deptErr) {
+          console.log('Could not fetch departments (non-critical):', deptErr);
+          setDepartments([
+            { department_id: 1, department_name: "Engineering", manager_id: null },
+            { department_id: 2, department_name: "HR", manager_id: null },
+            { department_id: 3, department_name: "Operations", manager_id: null },
+          ]);
+        }
+        
+      } catch (err) {
+        console.error('Error fetching employees:', err);
+        console.error('Error details:', err.response?.data);
+        setError(err.response?.data?.message || 'Failed to load employees');
+      } finally {
+        setLoading(false);
+      }
+    };
+    
+    fetchData();
+  }, []);
+
+  // Fetch complete employee details when card is clicked
+  const handleEmployeeClick = async (employee) => {
+    try {
+      console.log('Fetching complete details for employee:', employee.id);
+      const response = await userAPI.getUserById(employee.id);
+      console.log('Employee details:', response.data);
+      
+      // Merge with existing employee data
+      const completeEmployee = {
+        ...employee,
+        ...response.data.data,
+        full_name: response.data.data.full_name || response.data.data.name,
+      };
+      
+      setSelectedEmployee(completeEmployee);
+    } catch (err) {
+      console.error('Error fetching employee details:', err);
+      // Still show modal with available data
+      setSelectedEmployee(employee);
+    }
+  };
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -396,7 +491,10 @@ export default function Employees() {
             </div>
 
             {/* Add Employee Button */}
-            <button className="px-6 py-2.5 text-white text-sm font-medium rounded-lg transition-colors shadow-sm flex items-center gap-2 brand-btn">
+            <button 
+              onClick={() => navigate('/register')}
+              className="px-6 py-2.5 text-white text-sm font-medium rounded-lg transition-colors shadow-sm flex items-center gap-2 brand-btn"
+            >
               <svg
                 className="w-4 h-4"
                 fill="none"
@@ -476,20 +574,52 @@ export default function Employees() {
       </div>
 
       {/* Employee Cards Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-5">
-        {filteredEmployees.map((employee) => (
-          <EmployeeCard
-            key={employee.employee_id}
-            employee={employee}
-            onClick={() => setSelectedEmployee(employee)}
-          />
-        ))}
-      </div>
+      {loading && (
+        <div className="text-center py-12">
+          <div className="inline-block animate-spin rounded-full h-12 w-12 border-4 border-gray-200 border-t-gray-900"></div>
+          <p className="mt-4 text-gray-600">Loading employees...</p>
+        </div>
+      )}
+      
+      {error && (
+        <div className="bg-red-50 border border-red-200 rounded-lg p-6 text-center">
+          <svg className="w-12 h-12 text-red-500 mx-auto mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          <h3 className="text-lg font-semibold text-red-900 mb-2">Error Loading Employees</h3>
+          <p className="text-red-700 mb-4">{error}</p>
+          <button 
+            onClick={() => window.location.reload()} 
+            className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+          >
+            Retry
+          </button>
+          <p className="mt-3 text-sm text-red-600">Check console (F12) for details</p>
+        </div>
+      )}
+      
+      {!loading && !error && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-5">
+          {filteredEmployees.map((employee) => (
+            <EmployeeCard
+              key={employee.employee_id}
+              employee={employee}
+              onClick={() => handleEmployeeClick(employee)}
+            />
+          ))}
+        </div>
+      )}
 
       {/* Empty state */}
-      {filteredEmployees.length === 0 && (
-        <div className="text-center py-12 text-gray-500">
-          No employees found matching "{searchQuery}"
+      {!loading && !error && filteredEmployees.length === 0 && (
+        <div className="text-center py-12 bg-gray-50 rounded-lg border-2 border-dashed border-gray-300">
+          <svg className="w-16 h-16 text-gray-400 mx-auto mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+          </svg>
+          <p className="text-gray-600 text-lg font-medium">No employees found</p>
+          {searchQuery && (
+            <p className="text-gray-500 mt-2">Try adjusting your search query "{searchQuery}"</p>
+          )}
         </div>
       )}
 
