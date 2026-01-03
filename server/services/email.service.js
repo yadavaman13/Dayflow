@@ -327,9 +327,8 @@ export const sendEmployeeInviteEmail = async (
             background: rgba(255, 255, 255, 0.15);
             border-radius: 16px;
             margin: 0 auto 16px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
+            line-height: 60px;
+            text-align: center;
             color: white;
             font-size: 22px;
             font-weight: 800;
@@ -381,10 +380,7 @@ export const sendEmployeeInviteEmail = async (
             margin: 20px 0;
           }
           .info-row {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 12px 0;
+            padding: 14px 0;
           }
           .info-row:not(:last-child) {
             border-bottom: 1px solid #e5e0e4;
@@ -393,17 +389,21 @@ export const sendEmployeeInviteEmail = async (
             font-size: 13px;
             color: #6b7280;
             font-weight: 500;
+            display: block;
+            margin-bottom: 6px;
           }
           .info-value {
             font-size: 15px;
             color: #714B67;
             font-weight: 700;
             letter-spacing: 0.02em;
+            display: block;
           }
           .info-value-email {
             font-size: 14px;
             color: #374151;
             font-weight: 500;
+            display: block;
           }
           .button-container {
             text-align: center;
@@ -513,11 +513,11 @@ export const sendEmployeeInviteEmail = async (
               
               <div class="info-card">
                 <div class="info-row">
-                  <span class="info-label">Employee ID</span>
+                  <span class="info-label">Employee ID:</span>
                   <span class="info-value">${employeeId}</span>
                 </div>
                 <div class="info-row">
-                  <span class="info-label">Email Address</span>
+                  <span class="info-label">Email Address:</span>
                   <span class="info-value-email">${to}</span>
                 </div>
               </div>
