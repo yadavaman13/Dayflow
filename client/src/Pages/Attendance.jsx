@@ -1,12 +1,9 @@
 import { useState, useMemo, useEffect } from "react";
-
-// Mock user for skeleton UI
-const mockUser = { name: "User", role: "admin" };
+import api from "../services/api";
 
 export default function Attendance() {
-  // Using mock user instead of useAuth
-  const user = mockUser;
-  const [currentDate, setCurrentDate] = useState(new Date());
+  const [user, setUser] = useState(null);
+  const [currentDate, setCurrentDate] = useState(new Date(2024, 11, 1)); // December 2024 to show seed data
   const [selectedView, setSelectedView] = useState("monthly");
   const [filterDepartment, setFilterDepartment] = useState("all");
   const [filterStatus, setFilterStatus] = useState("all");
@@ -28,8 +25,16 @@ export default function Attendance() {
     halfDay: 0,
     late: 0,
     onTime: 0,
-    attendanceRate: 0
+    attendanceRate: 0,
   });
+
+  // Check authentication
+  useEffect(() => {
+    const userData = localStorage.getItem("user");
+    if (userData) {
+      setUser(JSON.parse(userData));
+    }
+  }, []);
 
   // Update current time every second
   useEffect(() => {
@@ -46,49 +51,85 @@ export default function Attendance() {
 
   const checkTodayAttendance = async () => {
     try {
-      const today = new Date().toISOString().split('T')[0];
-      const response = await api.get('/attendance/my-attendance', {
-        params: { startDate: today, endDate: today, limit: 1 }
-      });
+      const response = await api.get("/attendance/today");
 
-      if (response.data.success && response.data.data.length > 0) {
-        const record = response.data.data[0];
-        if (record.check_out_time) {
-          setCheckInStatus('checked-out');
-        } else if (record.check_in_time) {
-          setCheckInStatus('checked-in');
+      if (response.data.success && response.data.data) {
+        const record = response.data.data;
+        if (record.check_out) {
+          setCheckInStatus("checked-out");
+        } else if (record.check_in) {
+          setCheckInStatus("checked-in");
         }
       }
     } catch (error) {
-      console.error('Error checking attendance status:', error);
+      console.error("Error checking attendance status:", error);
     }
   };
 
   // Fetch attendance records
   useEffect(() => {
-    fetchAttendanceData();
-    fetchDepartments();
-  }, [currentDate, filterDepartment, filterStatus]);
+    if (user) {
+      fetchAttendanceData();
+      fetchDepartments();
+    }
+  }, [currentDate, filterDepartment, filterStatus, user]);
 
   const fetchAttendanceData = async () => {
     try {
       setLoading(true);
-      const dateStr = currentDate.toISOString().split('T')[0];
+      const startDate = new Date(currentDate);
+      startDate.setDate(1); // First day of month
+      const endDate = new Date(
+        currentDate.getFullYear(),
+        currentDate.getMonth() + 1,
+        0
+      ); // Last day of month
 
       const params = {
-        date: dateStr,
-        department: filterDepartment,
-        status: filterStatus
+        startDate: startDate.toISOString().split("T")[0],
+        endDate: endDate.toISOString().split("T")[0],
       };
 
-      const response = await api.get('/attendance/records', { params });
+      if (filterDepartment !== "all") {
+        params.department = filterDepartment;
+      }
+      if (filterStatus !== "all") {
+        params.status = filterStatus.toUpperCase();
+      }
+
+      const response = await api.get("/attendance/report", { params });
 
       if (response.data.success) {
-        setAttendanceRecords(response.data.data.records);
-        setStats(response.data.data.stats);
+        const records = response.data.data || [];
+        setAttendanceRecords(records);
+
+        // Calculate stats
+        const uniqueEmployees = new Set(records.map((r) => r.employee_id)).size;
+        const present = records.filter((r) => r.status === "PRESENT").length;
+        const absent = records.filter((r) => r.status === "ABSENT").length;
+        const halfDay = records.filter((r) => r.status === "HALF_DAY").length;
+
+        setStats({
+          total: records.length,
+          uniqueEmployees,
+          present,
+          absent,
+          halfDay,
+          late: records.filter(
+            (r) => r.check_in && new Date(r.check_in).getHours() >= 10
+          ).length,
+          onTime: records.filter(
+            (r) => r.check_in && new Date(r.check_in).getHours() < 10
+          ).length,
+          attendanceRate:
+            uniqueEmployees > 0
+              ? ((present / uniqueEmployees) * 100).toFixed(1)
+              : 0,
+        });
       }
     } catch (error) {
-      console.error('Error fetching attendance:', error);
+      console.error("Error fetching attendance:", error);
+      setAttendanceRecords([]);
     } finally {
       setLoading(false);
     }
@@ -96,12 +137,13 @@ export default function Attendance() {
 
   const fetchDepartments = async () => {
     try {
-      const response = await api.get('/attendance/departments');
+      const response = await api.get("/departments");
       if (response.data.success) {
-        setDepartments(response.data.data);
+        setDepartments(response.data.data || []);
       }
     } catch (error) {
-      console.error('Error fetching departments:', error);
+      console.error("Error fetching departments:", error);
+      setDepartments([]);
     }
   };
 
@@ -110,9 +152,9 @@ export default function Attendance() {
     return {
       employeeId: record.employee_code || record.employee_id,
       name: record.employee_name || "Unknown",
-      jobTitle: "N/A", // Can be added to query if needed
+      jobTitle: record.designation || "N/A",
       department: record.department_name || "N/A",
-      email: record.email || "N/A",
+      email: record.work_email || "N/A",
     };
   };
 
@@ -173,18 +215,26 @@ export default function Attendance() {
   const handleCheckInSubmit = async () => {
     try {
       setLoading(true);
-      const response = await api.post('/attendance/check-in');
+      const response = await api.post("/attendance/check-in", {
+        mode_id: 1, // Office mode
+        location: { type: "office" },
+        remarks: "Checked in via web",
+      });
 
       if (response.data.success) {
-        alert('✅ Checked in successfully!');
-        setCheckInStatus('checked-in');
+        alert("✅ Checked in successfully!");
+        setCheckInStatus("checked-in");
         setShowCheckInModal(false);
         // Refresh attendance data
+        await checkTodayAttendance();
         await fetchAttendanceData();
       }
     } catch (error) {
-      console.error('Error checking in:', error);
-      alert(error.response?.data?.message || 'Failed to check in. You may have already checked in today.');
+      console.error("Error checking in:", error);
+      alert(
+        error.response?.data?.message ||
+          "Failed to check in. You may have already checked in today."
+      );
     } finally {
       setLoading(false);
     }
@@ -193,25 +243,101 @@ export default function Attendance() {
   const handleCheckOutSubmit = async () => {
     try {
       setLoading(true);
-      const response = await api.post('/attendance/check-out');
+      const response = await api.post("/attendance/check-out", {
+        location: { type: "office" },
+        remarks: "Checked out via web",
+      });
 
       if (response.data.success) {
-        alert(`✅ Checked out successfully! You worked ${parseFloat(response.data.data.hours_worked).toFixed(2)} hours today.`);
-        setCheckInStatus('checked-out');
-        setShowCheckInModal(false);
-        // Refresh attendance data
+        const hours = response.data.data.working_hours || 0;
+        alert(
+          `✅ Checked out successfully! You worked ${parseFloat(hours).toFixed(
+            2
+          )} hours today.`
+        );
+        setCheckInStatus("checked-out");
+        await checkTodayAttendance();
         await fetchAttendanceData();
       }
     } catch (error) {
-      console.error('Error checking out:', error);
-      alert(error.response?.data?.message || 'Failed to check out. Please make sure you have checked in first.');
+      console.error("Error checking out:", error);
+      alert(error.response?.data?.message || "Failed to check out.");
     } finally {
       setLoading(false);
     }
   };
 
   const handleExport = () => {
-    alert("Export functionality will be implemented");
+    try {
+      // Prepare data for export
+      const exportData = filteredRecords.map((record) => {
+        const employee = getEmployeeDetails(record);
+        return {
+          Date: new Date(record.attendance_date).toLocaleDateString(),
+          "Employee ID": employee.employeeId,
+          "Employee Name": employee.name,
+          Department: employee.department,
+          Designation: employee.jobTitle,
+          "Check In": record.check_in
+            ? new Date(record.check_in).toLocaleTimeString()
+            : "-",
+          "Check Out": record.check_out
+            ? new Date(record.check_out).toLocaleTimeString()
+            : "-",
+          Status: record.status || "-",
+          "Working Hours": record.working_hours
+            ? `${parseFloat(record.working_hours).toFixed(2)}h`
+            : "-",
+          "Shift Type": record.shift_type || "-",
+          Remarks: record.remarks || "-",
+        };
+      });
+
+      // Convert to CSV
+      if (exportData.length === 0) {
+        alert("⚠️ No data to export");
+        return;
+      }
+
+      const headers = Object.keys(exportData[0]);
+      const csvContent = [
+        headers.join(","),
+        ...exportData.map((row) =>
+          headers
+            .map((header) => {
+              const value = row[header];
+              // Escape commas and quotes in values
+              return `"${String(value).replace(/"/g, '""')}"`;
+            })
+            .join(",")
+        ),
+      ].join("\n");
+
+      // Create blob and download
+      const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+      const link = document.createElement("a");
+      const url = URL.createObjectURL(blob);
+
+      const monthName = currentDate.toLocaleString("default", {
+        month: "long",
+      });
+      const year = currentDate.getFullYear();
+      const filename = `Attendance_Report_${monthName}_${year}.csv`;
+
+      link.setAttribute("href", url);
+      link.setAttribute("download", filename);
+      link.style.visibility = "hidden";
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+
+      alert(
+        `✅ Successfully exported ${exportData.length} records to ${filename}`
+      );
+    } catch (error) {
+      console.error("Export error:", error);
+      alert("❌ Failed to export data. Please try again.");
+    }
   };
 
   return (
@@ -229,27 +355,8 @@ export default function Attendance() {
           </div>
           <div className="flex gap-3">
             <button
-              onClick={handleCheckIn}
-              className="px-6 py-3 bg-[#A24689] text-white rounded-lg hover:bg-[#8a3a73] transition-colors duration-200 flex items-center gap-2 font-medium"
-            >
-              <svg
-                className="w-5 h-5"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
-                />
-              </svg>
-              Check In/Out
-            </button>
-            <button
               onClick={handleExport}
-              className="px-6 py-3 bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors duration-200 flex items-center gap-2 font-medium"
+              className="px-6 py-3 bg-[#A24689] text-white rounded-lg hover:bg-[#8a3a73] transition-colors duration-200 flex items-center gap-2 font-medium"
             >
               <svg
                 className="w-5 h-5"
@@ -357,7 +464,10 @@ export default function Attendance() {
           </p>
           <p className="text-3xl font-bold text-gray-900">{stats.late}</p>
           <p className="text-sm text-gray-500 mt-2 font-medium">
-            {stats.total > 0 ? ((stats.late / stats.total) * 100).toFixed(1) : 0}% of total
+            {stats.total > 0
+              ? ((stats.late / stats.total) * 100).toFixed(1)
+              : 0}
+            % of total
           </p>
         </div>
 
@@ -451,28 +561,31 @@ export default function Attendance() {
             <div className="flex border border-gray-300 rounded-lg overflow-hidden bg-white">
               <button
                 onClick={() => setSelectedView("daily")}
-                className={`px-5 py-2.5 text-sm font-medium transition-colors duration-200 ${selectedView === "daily"
+                className={`px-5 py-2.5 text-sm font-medium transition-colors duration-200 ${
+                  selectedView === "daily"
                     ? "bg-[#A24689] text-white"
                     : "bg-white text-gray-700 hover:bg-gray-50"
-                  }`}
+                }`}
               >
                 Daily
               </button>
               <button
                 onClick={() => setSelectedView("weekly")}
-                className={`px-5 py-2.5 text-sm font-medium border-x border-gray-300 transition-colors duration-200 ${selectedView === "weekly"
+                className={`px-5 py-2.5 text-sm font-medium border-x border-gray-300 transition-colors duration-200 ${
+                  selectedView === "weekly"
                     ? "bg-[#A24689] text-white"
                     : "bg-white text-gray-700 hover:bg-gray-50"
-                  }`}
+                }`}
               >
                 Weekly
               </button>
               <button
                 onClick={() => setSelectedView("monthly")}
-                className={`px-5 py-2.5 text-sm font-medium transition-colors duration-200 ${selectedView === "monthly"
+                className={`px-5 py-2.5 text-sm font-medium transition-colors duration-200 ${
+                  selectedView === "monthly"
                     ? "bg-[#A24689] text-white"
                     : "bg-white text-gray-700 hover:bg-gray-50"
-                  }`}
+                }`}
               >
                 Monthly
               </button>
@@ -611,19 +724,29 @@ export default function Attendance() {
                   const employeeDetails = getEmployeeDetails(record);
 
                   // Check if late (after 9:30 AM)
-                  const isLate = record.check_in_time && (() => {
-                    const checkIn = new Date(`2000-01-01 ${record.check_in_time}`);
-                    const standardTime = new Date(`2000-01-01 09:30:00`);
-                    return checkIn > standardTime;
-                  })();
+                  const isLate =
+                    record.check_in_time &&
+                    (() => {
+                      const checkIn = new Date(
+                        `2000-01-01 ${record.check_in_time}`
+                      );
+                      const standardTime = new Date(`2000-01-01 09:30:00`);
+                      return checkIn > standardTime;
+                    })();
 
                   // Calculate late by time
-                  const lateBy = isLate ? (() => {
-                    const checkIn = new Date(`2000-01-01 ${record.check_in_time}`);
-                    const standardTime = new Date(`2000-01-01 09:30:00`);
-                    const diffMinutes = Math.floor((checkIn - standardTime) / 60000);
-                    return `${diffMinutes} mins`;
-                  })() : null;
+                  const lateBy = isLate
+                    ? (() => {
+                        const checkIn = new Date(
+                          `2000-01-01 ${record.check_in_time}`
+                        );
+                        const standardTime = new Date(`2000-01-01 09:30:00`);
+                        const diffMinutes = Math.floor(
+                          (checkIn - standardTime) / 60000
+                        );
+                        return `${diffMinutes} mins`;
+                      })()
+                    : null;
 
                   return (
                     <tr
@@ -633,7 +756,11 @@ export default function Attendance() {
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                         <div className="flex items-center gap-2">
                           <span className="font-mono font-medium">
-                            {employeeDetails.employeeId || `EMP-${String(record.employee_id).padStart(3, "0")}`}
+                            {employeeDetails.employeeId ||
+                              `EMP-${String(record.employee_id).padStart(
+                                3,
+                                "0"
+                              )}`}
                           </span>
                           {isLate && (
                             <span
@@ -669,24 +796,28 @@ export default function Attendance() {
                       <td className="px-6 py-4 whitespace-nowrap">
                         <span
                           className={`inline-flex items-center px-2.5 py-1 rounded text-xs font-medium ${getStatusBadge(
-                            record.status.toLowerCase().replace(' ', '_')
+                            record.status.toLowerCase().replace(" ", "_")
                           )}`}
                         >
                           {record.status.toUpperCase()}
                         </span>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {new Date(record.date).toLocaleDateString('en-GB')}
+                        {new Date(record.date).toLocaleDateString("en-GB")}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {record.check_in_time || '-'}
+                        {record.check_in_time || "-"}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {record.check_out_time || '-'}
+                        {record.check_out_time || "-"}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm">
                         <div className="text-gray-900 font-medium">
-                          {record.hours_worked ? `${parseFloat(record.hours_worked).toFixed(2)} hrs` : '-'}
+                          {record.hours_worked
+                            ? `${parseFloat(record.hours_worked).toFixed(
+                                2
+                              )} hrs`
+                            : "-"}
                         </div>
                         {record.extraHours !== "00:00" && (
                           <div className="text-xs text-gray-500 mt-1">
@@ -855,11 +986,20 @@ export default function Attendance() {
               {checkInStatus && (
                 <div className="mt-3 pt-3 border-t border-gray-200">
                   <p className="text-xs font-medium text-gray-600">Status:</p>
-                  <p className={`text-sm font-semibold ${checkInStatus === 'checked-in' ? 'text-[#A24689]' :
-                      checkInStatus === 'checked-out' ? 'text-gray-600' : 'text-gray-600'
-                    }`}>
-                    {checkInStatus === 'checked-in' ? '✓ Checked In' :
-                      checkInStatus === 'checked-out' ? '✓ Checked Out' : 'Not Checked In'}
+                  <p
+                    className={`text-sm font-semibold ${
+                      checkInStatus === "checked-in"
+                        ? "text-[#A24689]"
+                        : checkInStatus === "checked-out"
+                        ? "text-gray-600"
+                        : "text-gray-600"
+                    }`}
+                  >
+                    {checkInStatus === "checked-in"
+                      ? "✓ Checked In"
+                      : checkInStatus === "checked-out"
+                      ? "✓ Checked Out"
+                      : "Not Checked In"}
                   </p>
                 </div>
               )}
@@ -867,9 +1007,18 @@ export default function Attendance() {
             <div className="flex gap-3">
               <button
                 onClick={handleCheckInSubmit}
-                disabled={checkInStatus === 'checked-in' || checkInStatus === 'checked-out' || loading}
-                className={`flex-1 px-6 py-3 bg-[#A24689] text-white rounded-lg hover:bg-[#8a3a73] transition-colors duration-200 font-medium flex items-center justify-center gap-2 ${(checkInStatus === 'checked-in' || checkInStatus === 'checked-out' || loading) ? 'opacity-50 cursor-not-allowed' : ''
-                  }`}
+                disabled={
+                  checkInStatus === "checked-in" ||
+                  checkInStatus === "checked-out" ||
+                  loading
+                }
+                className={`flex-1 px-6 py-3 bg-[#A24689] text-white rounded-lg hover:bg-[#8a3a73] transition-colors duration-200 font-medium flex items-center justify-center gap-2 ${
+                  checkInStatus === "checked-in" ||
+                  checkInStatus === "checked-out" ||
+                  loading
+                    ? "opacity-50 cursor-not-allowed"
+                    : ""
+                }`}
               >
                 <svg
                   className="w-5 h-5"
@@ -884,13 +1033,16 @@ export default function Attendance() {
                     d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1"
                   />
                 </svg>
-                {loading ? 'Processing...' : 'Check In'}
+                {loading ? "Processing..." : "Check In"}
               </button>
               <button
                 onClick={handleCheckOutSubmit}
-                disabled={checkInStatus !== 'checked-in' || loading}
-                className={`flex-1 px-6 py-3 bg-gray-700 text-white rounded-lg hover:bg-gray-800 transition-colors duration-200 font-medium flex items-center justify-center gap-2 ${(checkInStatus !== 'checked-in' || loading) ? 'opacity-50 cursor-not-allowed' : ''
-                  }`}
+                disabled={checkInStatus !== "checked-in" || loading}
+                className={`flex-1 px-6 py-3 bg-gray-700 text-white rounded-lg hover:bg-gray-800 transition-colors duration-200 font-medium flex items-center justify-center gap-2 ${
+                  checkInStatus !== "checked-in" || loading
+                    ? "opacity-50 cursor-not-allowed"
+                    : ""
+                }`}
               >
                 <svg
                   className="w-5 h-5"
@@ -905,7 +1057,7 @@ export default function Attendance() {
                     d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"
                   />
                 </svg>
-                {loading ? 'Processing...' : 'Check Out'}
+                {loading ? "Processing..." : "Check Out"}
               </button>
             </div>
           </div>

@@ -6,6 +6,7 @@ import {
   Route,
   Navigate,
 } from "react-router-dom";
+import api from "../services/api";
 import "../Styles/dashboard.css";
 
 const Dashboard = () => {
@@ -16,7 +17,7 @@ const Dashboard = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const [department, setDepartment] = useState("all");
   const [status, setStatus] = useState("all");
-  const [currentDate, setCurrentDate] = useState(new Date());
+  const [currentDate, setCurrentDate] = useState(new Date(2024, 11, 2)); // December 2, 2024 to show seed data
   const [attendanceRecords, setAttendanceRecords] = useState([]);
   const [employees, setEmployees] = useState([]);
 
@@ -30,53 +31,61 @@ const Dashboard = () => {
     }
 
     setUser(JSON.parse(userData));
-    // Mock data - replace with actual API calls
-    setAttendanceRecords([]);
 
-    // Mock employee data
-    setEmployees([
-      {
-        id: 1,
-        name: "Aarav Mehta",
-        email: "aarav.mehta@workzen.io",
-        status: "present",
-        avatar:
-          "https://ui-avatars.com/api/?name=Aarav+Mehta&background=8e44ad&color=fff",
-      },
-      {
-        id: 2,
-        name: "Jiya Sharma",
-        email: "jiya.sharma@workzen.io",
-        status: "present",
-        avatar:
-          "https://ui-avatars.com/api/?name=Jiya+Sharma&background=8e44ad&color=fff",
-      },
-      {
-        id: 3,
-        name: "Kabir Patel",
-        email: "kabir.patel@workzen.io",
-        status: "present",
-        avatar:
-          "https://ui-avatars.com/api/?name=Kabir+Patel&background=8e44ad&color=fff",
-      },
-      {
-        id: 4,
-        name: "Riya Kapoor",
-        email: "riya.kapoor@workzen.io",
-        status: "present",
-        avatar:
-          "https://ui-avatars.com/api/?name=Riya+Kapoor&background=8e44ad&color=fff",
-      },
-      {
-        id: 5,
-        name: "Dev Singh",
-        email: "dev.singh@workzen.io",
-        status: "present",
-        avatar:
-          "https://ui-avatars.com/api/?name=Dev+Singh&background=8e44ad&color=fff",
-      },
-    ]);
-  }, [navigate]);
+    // Fetch real attendance data
+    fetchAttendanceRecords();
+    fetchEmployees();
+  }, [navigate, currentDate, department, status]);
+
+  const fetchAttendanceRecords = async () => {
+    try {
+      const params = {
+        startDate: currentDate.toISOString().split("T")[0],
+        endDate: currentDate.toISOString().split("T")[0],
+      };
+
+      if (department !== "all") {
+        params.department = department;
+      }
+      if (status !== "all") {
+        params.status = status.toUpperCase();
+      }
+
+      const response = await api.get("/attendance/report", { params });
+      if (response.data.success) {
+        setAttendanceRecords(response.data.data || []);
+      }
+    } catch (error) {
+      console.error("Error fetching attendance records:", error);
+      setAttendanceRecords([]);
+    }
+  };
+
+  const fetchEmployees = async () => {
+    try {
+      const response = await api.get("/employees");
+      if (response.data.success) {
+        setEmployees(response.data.data || []);
+      }
+    } catch (error) {
+      console.error("Error fetching employees:", error);
+      // Fallback to mock data if API fails
+      setEmployees([
+        {
+          id: 1,
+          full_name: "Aarav Mehta",
+          work_email: "aarav.mehta@workzen.io",
+          employee_status: "ACTIVE",
+        },
+        {
+          id: 2,
+          full_name: "Jiya Sharma",
+          work_email: "jiya.sharma@workzen.io",
+          employee_status: "ACTIVE",
+        },
+      ]);
+    }
+  };
 
   const handleLogout = () => {
     localStorage.removeItem("token");
@@ -104,6 +113,35 @@ const Dashboard = () => {
     setCurrentDate(newDate);
   };
 
+  const filteredEmployees = employees.filter((emp) => {
+    const matchesSearch =
+      (emp.full_name || emp.name || "")
+        .toLowerCase()
+        .includes(searchQuery.toLowerCase()) ||
+      (emp.work_email || emp.email || "")
+        .toLowerCase()
+        .includes(searchQuery.toLowerCase());
+    return matchesSearch;
+  });
+
+  // Calculate stats from real data
+  const stats = {
+    attendanceRate:
+      attendanceRecords.length > 0
+        ? (
+            (attendanceRecords.filter((r) => r.status === "PRESENT").length /
+              attendanceRecords.length) *
+            100
+          ).toFixed(1)
+        : 0,
+    presentToday: attendanceRecords.filter((r) => r.status === "PRESENT")
+      .length,
+    lateArrivals: attendanceRecords.filter(
+      (r) => r.check_in && new Date(r.check_in).getHours() >= 10
+    ).length,
+    absent: attendanceRecords.filter((r) => r.status === "ABSENT").length,
+  };
+
   const getActiveNav = () => {
     const path = location.pathname;
     if (path.includes("/employees")) return "employees";
@@ -119,13 +157,6 @@ const Dashboard = () => {
     navigate(`/dashboard/${path}`);
   };
 
-  const filteredEmployees = employees.filter((emp) => {
-    const matchesSearch =
-      emp.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      emp.email.toLowerCase().includes(searchQuery.toLowerCase());
-    return matchesSearch;
-  });
-
   if (!user) {
     return (
       <div className="loading-container">
@@ -133,13 +164,6 @@ const Dashboard = () => {
       </div>
     );
   }
-
-  const stats = {
-    attendanceRate: 0,
-    presentToday: 0,
-    lateArrivals: 0,
-    absent: 0,
-  };
 
   return (
     <div className="dashboard-container">
@@ -689,19 +713,49 @@ const AttendanceSection = ({
           ) : (
             attendanceRecords.map((record) => (
               <tr key={record.id}>
-                <td>{record.employeeId}</td>
-                <td>{record.employeeName}</td>
-                <td>{record.department}</td>
+                <td>{record.employee_code || record.employee_id}</td>
+                <td>{record.employee_name || "Unknown"}</td>
+                <td>{record.department_name || "N/A"}</td>
                 <td>
-                  <span className={`status-badge ${record.status}`}>
-                    {record.status.toUpperCase()}
+                  <span
+                    className={`status-badge ${(
+                      record.status || "absent"
+                    ).toLowerCase()}`}
+                  >
+                    {(record.status || "ABSENT").toUpperCase()}
                   </span>
                 </td>
-                <td>{record.date}</td>
-                <td>{record.checkIn}</td>
-                <td>{record.checkOut}</td>
-                <td>{record.workHours}</td>
-                <td>{record.location}</td>
+                <td>
+                  {record.attendance_date
+                    ? new Date(record.attendance_date).toLocaleDateString()
+                    : "-"}
+                </td>
+                <td>
+                  {record.check_in
+                    ? new Date(record.check_in).toLocaleTimeString("en-US", {
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })
+                    : "-"}
+                </td>
+                <td>
+                  {record.check_out
+                    ? new Date(record.check_out).toLocaleTimeString("en-US", {
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })
+                    : "-"}
+                </td>
+                <td>
+                  {record.working_hours
+                    ? `${parseFloat(record.working_hours).toFixed(2)}h`
+                    : "-"}
+                </td>
+                <td>
+                  {record.check_in_location
+                    ? JSON.parse(record.check_in_location).type || "Office"
+                    : "N/A"}
+                </td>
                 <td>
                   <button className="action-btn">
                     <svg
@@ -732,7 +786,12 @@ const EmployeesSection = ({ employees, searchQuery, setSearchQuery }) => {
   const [activeFilter, setActiveFilter] = useState("all");
 
   const filteredByStatus = employees.filter((emp) => {
-    return activeFilter === "all" || emp.status === activeFilter;
+    const empStatus = (
+      emp.employee_status ||
+      emp.status ||
+      "active"
+    ).toLowerCase();
+    return activeFilter === "all" || empStatus === activeFilter.toLowerCase();
   });
 
   return (
@@ -839,7 +898,11 @@ const EmployeesSection = ({ employees, searchQuery, setSearchQuery }) => {
           <div key={employee.id} className="employee-card-grid">
             <div className="card-status-indicator">
               <span
-                className={`status-indicator-dot ${employee.status}`}
+                className={`status-indicator-dot ${(
+                  employee.employee_status ||
+                  employee.status ||
+                  "active"
+                ).toLowerCase()}`}
               ></span>
             </div>
             <div className="employee-avatar-wrapper">
@@ -857,8 +920,12 @@ const EmployeesSection = ({ employees, searchQuery, setSearchQuery }) => {
                 </svg>
               </div>
             </div>
-            <h3 className="employee-name-grid">{employee.name}</h3>
-            <p className="employee-email-grid">{employee.email}</p>
+            <h3 className="employee-name-grid">
+              {employee.full_name || employee.name}
+            </h3>
+            <p className="employee-email-grid">
+              {employee.work_email || employee.email}
+            </p>
           </div>
         ))}
       </div>
