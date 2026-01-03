@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { Link } from "react-router-dom";
-import { authAPI } from "../Services/api";
+import { authAPI } from "../services/api";
 import { ArrowLeft, Mail, Send, CheckCircle2, Info } from "lucide-react";
 import "../Styles/auth.css";
 

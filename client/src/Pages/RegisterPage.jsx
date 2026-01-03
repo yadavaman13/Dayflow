@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { authAPI } from '../Services/api';
+import { authAPI } from '../services/api';
 import { CalendarDays } from 'lucide-react';
 import '../Styles/auth.css';
 

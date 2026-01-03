@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
-import { authAPI } from '../Services/api';
+import { authAPI } from '../services/api';
 import { CalendarDays } from 'lucide-react';
 import '../Styles/auth.css';
 
@@ -294,9 +294,7 @@ const LoginPage = () => {
                     </form>
 
                     {/* Footer */}   {/*remove */}
-                    <div className="auth-footer">
-                        <p>Don't have an account? <Link to="/register" className="auth-link">Register here</Link></p>
-                    </div>
+
                 </div>
             </div>
 

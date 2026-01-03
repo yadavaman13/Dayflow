@@ -1,6 +1,5 @@
 import { useState, useEffect } from "react";
-// import SmartSchedulingAssistant from "../components/SmartSchedulingAssistant.jsx";
-import axios from "../api/axios";
+import { leaveAPI } from "../services/api";
 
 export default function TimeOff() {
   const [activeTab, setActiveTab] = useState("timeOff");
@@ -9,6 +8,7 @@ export default function TimeOff() {
   const [showModal, setShowModal] = useState(false);
   const [showNewRequestModal, setShowNewRequestModal] = useState(false);
   const [timeOffRequests, setTimeOffRequests] = useState([]);
+  const [leaveTypes, setLeaveTypes] = useState([]);
   const [leaveBalance, setLeaveBalance] = useState({
     paid_leave_balance: 24,
     sick_leave_balance: 7
@@ -24,25 +24,40 @@ export default function TimeOff() {
     document: null,
   });
 
-  // Fetch time off requests and leave balance on mount
+  // Get user data from localStorage
+  const user = JSON.parse(localStorage.getItem("user") || "{}");
+  const isHROrAdmin = user.role === "HR" || user.role === "ADMIN";
+
+  // Fetch time off requests, leave types and leave balance on mount
   useEffect(() => {
     fetchTimeOffRequests();
     fetchLeaveBalance();
+    fetchLeaveTypes();
   }, []);
+
+  const fetchLeaveTypes = async () => {
+    try {
+      const response = await leaveAPI.getLeaveTypes();
+      if (response.data.success) {
+        setLeaveTypes(response.data.data);
+      }
+    } catch (error) {
+      console.error("Error fetching leave types:", error);
+    }
+  };
 
   const fetchTimeOffRequests = async () => {
     try {
       setLoading(true);
-      const token = localStorage.getItem("token");
-      const response = await axios.get("/api/timeoff", {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      // HR/Admin can see all leaves, employees see their own
+      const response = isHROrAdmin 
+        ? await leaveAPI.getAllLeaves()
+        : await leaveAPI.getMyLeaves();
       if (response.data.success) {
-        setTimeOffRequests(response.data.data);
+        setTimeOffRequests(response.data.data || []);
       }
     } catch (error) {
       console.error("Error fetching time off requests:", error);
-      alert("Failed to fetch time off requests");
     } finally {
       setLoading(false);
     }
@@ -50,12 +65,29 @@ export default function TimeOff() {
 
   const fetchLeaveBalance = async () => {
     try {
-      const token = localStorage.getItem("token");
-      const response = await axios.get("/api/timeoff/balance", {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      const response = await leaveAPI.getLeaveBalance();
       if (response.data.success) {
-        setLeaveBalance(response.data.data);
+        const balances = response.data.data || [];
+        // Calculate totals from balance array
+        let paidBalance = 0;
+        let sickBalance = 0;
+        
+        balances.forEach(b => {
+          const code = b.code?.toUpperCase();
+          const leaveType = b.leave_type?.toLowerCase() || '';
+          
+          if (code === 'SL' || leaveType.includes('sick')) {
+            sickBalance = parseFloat(b.remaining_days) || 0;
+          } else if (code !== 'UL') {
+            // Add all non-unpaid leave to paid balance
+            paidBalance += parseFloat(b.remaining_days) || 0;
+          }
+        });
+        
+        setLeaveBalance({
+          paid_leave_balance: paidBalance > 0 ? paidBalance : 24,
+          sick_leave_balance: sickBalance > 0 ? sickBalance : 7
+        });
       }
     } catch (error) {
       console.error("Error fetching leave balance:", error);
@@ -105,34 +137,40 @@ export default function TimeOff() {
   const handleSubmitRequest = async (e) => {
     e.preventDefault();
 
-    // Validate sick leave attachment
-    if (formData.leaveType === 'Sick' && !formData.document) {
-      alert('Medical certificate is mandatory for sick leave');
+    // Validate required fields
+    if (!formData.leaveType || !formData.fromDate || !formData.toDate || !formData.durationType || !formData.description) {
+      alert('Please fill all required fields');
       return;
     }
 
     try {
       setLoading(true);
-      const token = localStorage.getItem("token");
 
-      // Create FormData for file upload
-      const submitData = new FormData();
-      submitData.append('leaveType', formData.leaveType);
-      submitData.append('fromDate', formData.fromDate);
-      submitData.append('toDate', formData.toDate);
-      submitData.append('durationType', formData.durationType);
-      submitData.append('description', formData.description);
-      submitData.append('contactNumber', formData.contactNumber);
-      if (formData.document) {
-        submitData.append('document', formData.document);
+      // Calculate total days
+      const startDate = new Date(formData.fromDate);
+      const endDate = new Date(formData.toDate);
+      const diffTime = Math.abs(endDate - startDate);
+      let totalDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
+      
+      // Adjust for half day
+      if (formData.durationType === 'Half Day') {
+        totalDays = totalDays * 0.5;
       }
 
-      const response = await axios.post("/api/timeoff", submitData, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'multipart/form-data'
-        }
-      });
+      // Find leave type id from selected leave type name
+      const selectedLeaveType = leaveTypes.find(lt => lt.name === formData.leaveType || lt.code === formData.leaveType);
+      const leaveTypeId = selectedLeaveType?.id || 1; // Default to 1 if not found
+
+      const submitData = {
+        leave_type_id: leaveTypeId,
+        start_date: formData.fromDate,
+        end_date: formData.toDate,
+        total_days: totalDays,
+        reason: `${formData.description}\n\nContact: ${formData.contactNumber}`,
+        supporting_document_url: null // File upload can be added later
+      };
+
+      const response = await leaveAPI.applyLeave(submitData);
 
       if (response.data.success) {
         alert("Time off request submitted successfully!");
@@ -161,12 +199,7 @@ export default function TimeOff() {
   const handleApprove = async () => {
     try {
       setLoading(true);
-      const token = localStorage.getItem("token");
-      const response = await axios.put(
-        `/api/timeoff/${selectedRequest.id}/approve`,
-        {},
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
+      const response = await leaveAPI.approveLeave(selectedRequest.id, {});
 
       if (response.data.success) {
         alert("Request Approved");
@@ -185,12 +218,7 @@ export default function TimeOff() {
   const handleReject = async () => {
     try {
       setLoading(true);
-      const token = localStorage.getItem("token");
-      const response = await axios.put(
-        `/api/timeoff/${selectedRequest.id}/reject`,
-        {},
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
+      const response = await leaveAPI.rejectLeave(selectedRequest.id, {});
 
       if (response.data.success) {
         alert("Request Rejected");
@@ -219,8 +247,14 @@ export default function TimeOff() {
   const filteredRequests = timeOffRequests.filter(request =>
     request.employee_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
     request.leave_type?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    request.status?.toLowerCase().includes(searchQuery.toLowerCase())
+    request.status?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    user.name?.toLowerCase().includes(searchQuery.toLowerCase())
   );
+
+  // Get employee name - use from request or fallback to logged in user
+  const getEmployeeName = (request) => {
+    return request.employee_name || user.name || user.full_name || 'You';
+  };
 
   return (
     <>
@@ -339,13 +373,13 @@ export default function TimeOff() {
                 filteredRequests.map((request) => (
                   <tr key={request.id} className="hover:bg-gray-50 transition-colors">
                     <td className="px-6 py-4 text-sm text-gray-900 text-center">
-                      {request.employee_name}
+                      {getEmployeeName(request)}
                     </td>
                     <td className="px-6 py-4 text-sm text-gray-900 text-center">
-                      {formatDate(request.from_date)}
+                      {formatDate(request.start_date)}
                     </td>
                     <td className="px-6 py-4 text-sm text-gray-900 text-center">
-                      {formatDate(request.to_date)}
+                      {formatDate(request.end_date)}
                     </td>
                     <td className="px-6 py-4 text-center">
                       <span className="text-sm text-blue-600 font-medium">
@@ -353,9 +387,11 @@ export default function TimeOff() {
                       </span>
                     </td>
                     <td className="px-6 py-4 text-sm text-center">
-                      <span className={`capitalize px-3 py-1 rounded-full text-xs font-medium ${request.status === 'approved' ? 'bg-green-100 text-green-800' :
-                        request.status === 'rejected' ? 'bg-red-100 text-red-800' :
-                          'bg-yellow-100 text-yellow-800'
+                      <span className={`capitalize px-3 py-1 rounded-full text-xs font-medium ${
+                        request.status === 'APPROVED' ? 'bg-green-100 text-green-800' :
+                        request.status === 'REJECTED' ? 'bg-red-100 text-red-800' :
+                        request.status === 'CANCELLED' ? 'bg-gray-100 text-gray-800' :
+                        'bg-yellow-100 text-yellow-800'
                         }`}>
                         {request.status}
                       </span>
@@ -425,21 +461,21 @@ export default function TimeOff() {
                 <div className="flex justify-between items-center">
                   <p className="text-sm text-gray-500">Employee Name</p>
                   <p className="text-base font-medium text-gray-900">
-                    {selectedRequest.employeeName}
+                    {getEmployeeName(selectedRequest)}
                   </p>
                 </div>
 
                 <div className="flex justify-between items-center">
                   <p className="text-sm text-gray-500">Start Date</p>
                   <p className="text-base font-medium text-gray-900">
-                    {formatDate(selectedRequest.from_date)}
+                    {formatDate(selectedRequest.start_date)}
                   </p>
                 </div>
 
                 <div className="flex justify-between items-center">
                   <p className="text-sm text-gray-500">End Date</p>
                   <p className="text-base font-medium text-gray-900">
-                    {formatDate(selectedRequest.to_date)}
+                    {formatDate(selectedRequest.end_date)}
                   </p>
                 </div>
 
@@ -451,17 +487,18 @@ export default function TimeOff() {
                 </div>
 
                 <div className="flex justify-between items-center">
-                  <p className="text-sm text-gray-500">Duration Type</p>
+                  <p className="text-sm text-gray-500">Total Days</p>
                   <p className="text-base font-medium text-gray-900">
-                    {selectedRequest.duration_type}
+                    {selectedRequest.total_days} day(s)
                   </p>
                 </div>
 
                 <div className="flex justify-between items-center">
                   <p className="text-sm text-gray-500">Status</p>
-                  <p className={`text-base font-medium capitalize ${selectedRequest.status === 'approved' ? 'text-green-600' :
-                    selectedRequest.status === 'rejected' ? 'text-red-600' :
-                      'text-yellow-600'
+                  <p className={`text-base font-medium capitalize ${
+                    selectedRequest.status === 'APPROVED' ? 'text-green-600' :
+                    selectedRequest.status === 'REJECTED' ? 'text-red-600' :
+                    'text-yellow-600'
                     }`}>
                     {selectedRequest.status}
                   </p>
@@ -470,140 +507,60 @@ export default function TimeOff() {
                 <div className="flex justify-between items-start">
                   <p className="text-sm text-gray-500">Reason</p>
                   <p className="text-base font-medium text-gray-900 text-right max-w-[250px]">
-                    {selectedRequest.reason}
+                    {selectedRequest.reason || 'N/A'}
                   </p>
-                </div>
-
-                <div className="flex justify-between items-center">
-                  <p className="text-sm text-gray-500">Contact Number</p>
-                  <p className="text-base font-medium text-gray-900">
-                    {selectedRequest.contact_number}
-                  </p>
-                </div>
-
-                <div className="pt-2 border-t border-gray-200">
-                  <p className="text-sm text-gray-500 mb-2">Time off Balance</p>
-                  <div className="flex justify-between items-center">
-                    <div>
-                      <p className="text-xs text-gray-400">Before</p>
-                      <p className="text-base font-semibold text-gray-900">
-                        {selectedRequest.balance_before}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-xs text-gray-400">After</p>
-                      <p className="text-base font-semibold text-gray-900">
-                        {selectedRequest.balance_after}
-                      </p>
-                    </div>
-                  </div>
                 </div>
               </div>
 
-              {/* Right Column - Impact Analysis */}
+              {/* Right Column - Additional Info */}
               <div className="space-y-4">
                 <h3 className="text-lg font-semibold text-gray-900 mb-4">
-                  Impact Analysis
+                  Request Details
                 </h3>
 
                 <div className="flex justify-between items-center">
-                  <p className="text-sm text-gray-500">Team Members on Leave</p>
+                  <p className="text-sm text-gray-500">Applied On</p>
                   <p className="text-base font-medium text-gray-900">
-                    {selectedRequest.team_members_on_leave || 0}
+                    {selectedRequest.applied_at ? new Date(selectedRequest.applied_at).toLocaleDateString() : 'N/A'}
                   </p>
                 </div>
 
                 <div className="flex justify-between items-center">
-                  <p className="text-sm text-gray-500">Workload Risk</p>
+                  <p className="text-sm text-gray-500">Pay Type</p>
                   <p className="text-base font-medium text-gray-900">
-                    {selectedRequest.workload_risk || 'Low'}
+                    {selectedRequest.pay_type || 'PAID'}
                   </p>
                 </div>
-
-                <div className="flex justify-between items-center">
-                  <p className="text-sm text-gray-500">Productivity Impact</p>
-                  <p className="text-base font-medium text-gray-900">
-                    {selectedRequest.productivity_impact || 'N/A'}
-                  </p>
-                </div>
-
-                <div className="flex justify-between items-center">
-                  <p className="text-sm text-gray-500">Payroll Impact</p>
-                  <p className="text-base font-medium text-gray-900">
-                    {selectedRequest.payroll_impact || 'N/A'}
-                  </p>
-                </div>
-
-                <div className="flex justify-between items-center">
-                  <p className="text-sm text-gray-500">Critical Role Flag</p>
-                  <p className="text-base font-medium text-gray-900">
-                    {selectedRequest.critical_role_flag || 'No'}
-                  </p>
-                </div>
-
-                {selectedRequest.approved_by_name && (
-                  <div className="pt-2 border-t border-gray-200">
-                    <div className="flex justify-between items-center">
-                      <p className="text-sm text-gray-500">Approved By</p>
-                      <p className="text-base font-medium text-green-600">
-                        {selectedRequest.approved_by_name}
-                      </p>
-                    </div>
-                    <div className="flex justify-between items-center mt-2">
-                      <p className="text-sm text-gray-500">Approved At</p>
-                      <p className="text-sm text-gray-600">
-                        {new Date(selectedRequest.approved_at).toLocaleString()}
-                      </p>
-                    </div>
-                  </div>
-                )}
-
-                {selectedRequest.rejected_by_name && (
-                  <div className="pt-2 border-t border-gray-200">
-                    <div className="flex justify-between items-center">
-                      <p className="text-sm text-gray-500">Rejected By</p>
-                      <p className="text-base font-medium text-red-600">
-                        {selectedRequest.rejected_by_name}
-                      </p>
-                    </div>
-                    <div className="flex justify-between items-center mt-2">
-                      <p className="text-sm text-gray-500">Rejected At</p>
-                      <p className="text-sm text-gray-600">
-                        {new Date(selectedRequest.rejected_at).toLocaleString()}
-                      </p>
-                    </div>
-                  </div>
-                )}
               </div>
             </div>
 
             {/* Modal Footer */}
             <div className="flex items-center justify-end gap-4 px-8 py-6 border-t border-gray-200">
-              {selectedRequest.status === 'pending' && (
+              {selectedRequest.status === 'PENDING' && isHROrAdmin && (
                 <>
                   <button
                     onClick={handleReject}
-                    className="px-6 py-2.5 border border-red-500 text-red-500 rounded-lg hover:bg-red-50 transition-colors font-medium"
+                    disabled={loading}
+                    className="px-6 py-2.5 border border-red-500 text-red-500 rounded-lg hover:bg-red-50 transition-colors font-medium disabled:opacity-50"
                   >
-                    Reject
+                    {loading ? 'Processing...' : 'Reject'}
                   </button>
                   <button
                     onClick={handleApprove}
-                    className="px-6 py-2.5 text-white rounded-lg hover:opacity-90 transition-opacity font-medium"
+                    disabled={loading}
+                    className="px-6 py-2.5 text-white rounded-lg hover:opacity-90 transition-opacity font-medium disabled:opacity-50"
                     style={{ backgroundColor: "#A24689" }}
                   >
-                    Approve
+                    {loading ? 'Processing...' : 'Approve'}
                   </button>
                 </>
               )}
-              {selectedRequest.status !== 'pending' && (
-                <button
-                  onClick={handleCloseModal}
-                  className="px-6 py-2.5 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors font-medium"
-                >
-                  Close
-                </button>
-              )}
+              <button
+                onClick={handleCloseModal}
+                className="px-6 py-2.5 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors font-medium"
+              >
+                Close
+              </button>
             </div>
           </div>
         </div>
@@ -664,10 +621,20 @@ export default function TimeOff() {
                     className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#A24689] focus:border-transparent outline-none transition-all"
                   >
                     <option value="">Select Leave Type</option>
-                    <option value="Paid">Paid</option>
-                    <option value="Sick">Sick</option>
-                    <option value="Unpaid">Unpaid</option>
-                    <option value="Emergency">Emergency</option>
+                    {leaveTypes.length > 0 ? (
+                      leaveTypes.map((type) => (
+                        <option key={type.id} value={type.name}>
+                          {type.name}
+                        </option>
+                      ))
+                    ) : (
+                      <>
+                        <option value="Casual Leave">Casual Leave</option>
+                        <option value="Sick Leave">Sick Leave</option>
+                        <option value="Earned Leave">Earned Leave</option>
+                        <option value="Unpaid Leave">Unpaid Leave</option>
+                      </>
+                    )}
                   </select>
                 </div>
 

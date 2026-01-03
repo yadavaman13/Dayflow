@@ -26,30 +26,87 @@ export const applyLeave = async (req, res) => {
       [req.user.id]
     );
 
-    if (!users[0] || !users[0].employee_table_id) {
-      return res.status(404).json({
-        success: false,
-        message: 'Employee profile not found',
-      });
-    }
+    const employee_table_id = users[0]?.employee_table_id;
 
-    const employee_id = users[0].employee_table_id;
+    // Get leave type info
+    const [leaveTypeInfo] = await connection.query(
+      'SELECT max_days_per_year FROM leave_types WHERE id = ?',
+      [leave_type_id]
+    );
 
-    // Check leave balance
-    const [balance] = await connection.query(
-      `SELECT remaining_days FROM leave_balances 
+    // Check if balance exists, if not create it
+    const [existingBalance] = await connection.query(
+      `SELECT id, remaining_days FROM leave_balances 
        WHERE user_id = ? AND leave_type_id = ? AND year = YEAR(CURDATE())`,
       [req.user.id, leave_type_id]
     );
 
-    if (balance.length === 0 || balance[0].remaining_days < total_days) {
+    let balance;
+    if (existingBalance.length === 0) {
+      // Create balance record
+      const maxDays = leaveTypeInfo[0]?.max_days_per_year || 12;
+      await connection.query(
+        `INSERT INTO leave_balances (user_id, leave_type_id, year, opening_balance, allocated_days, used_days, pending_days)
+         VALUES (?, ?, YEAR(CURDATE()), 0, ?, 0, 0)`,
+        [req.user.id, leave_type_id, maxDays]
+      );
+      
+      // Re-fetch the balance
+      const [newBalance] = await connection.query(
+        `SELECT remaining_days FROM leave_balances 
+         WHERE user_id = ? AND leave_type_id = ? AND year = YEAR(CURDATE())`,
+        [req.user.id, leave_type_id]
+      );
+      balance = newBalance;
+    } else {
+      balance = existingBalance;
+    }
+
+    if (balance[0].remaining_days < total_days) {
       return res.status(400).json({
         success: false,
-        message: 'Insufficient leave balance',
+        message: `Insufficient leave balance. Available: ${balance[0].remaining_days} days, Requested: ${total_days} days`,
       });
     }
 
-    // Insert leave request
+    // Insert leave request - employee_id can be the employee_table_id or we need to create one
+    // For now, if there's no employee_table_id, we'll create a basic employee record or use user_id approach
+    let employee_id = employee_table_id;
+    
+    if (!employee_id) {
+      // Get user details to create a basic employee
+      const [userDetails] = await connection.query(
+        'SELECT name, full_name, email, employee_id as emp_code FROM users WHERE id = ?',
+        [req.user.id]
+      );
+      
+      const userData = userDetails[0];
+      
+      // Check if employee with this code already exists
+      const [existingEmp] = await connection.query(
+        'SELECT id FROM employees WHERE employee_code = ?',
+        [userData.emp_code || `EMP${req.user.id}`]
+      );
+      
+      if (existingEmp.length > 0) {
+        employee_id = existingEmp[0].id;
+      } else {
+        // Create a basic employee record
+        const [empResult] = await connection.query(
+          `INSERT INTO employees (employee_code, company_id, first_name, last_name, work_email, date_of_joining, employee_status)
+           VALUES (?, 1, ?, '', ?, CURDATE(), 'ACTIVE')`,
+          [userData.emp_code || `EMP${req.user.id}`, userData.name || userData.full_name || 'User', userData.email]
+        );
+        employee_id = empResult.insertId;
+        
+        // Link employee to user
+        await connection.query(
+          'UPDATE users SET employee_table_id = ? WHERE id = ?',
+          [employee_id, req.user.id]
+        );
+      }
+    }
+
     const [result] = await connection.query(
       `INSERT INTO leave_requests 
         (employee_id, user_id, leave_type_id, start_date, end_date, total_days, reason, supporting_document_url, status)
@@ -95,13 +152,14 @@ export const applyLeave = async (req, res) => {
 
 export const getMyLeaves = async (req, res) => {
   try {
-    const { status, startDate, page = 1, limit = 10 } = req.query;
+    const { status, startDate, page = 1, limit = 20 } = req.query;
     const offset = (page - 1) * limit;
 
     let query = `
-      SELECT lr.*, lt.name as leave_type
+      SELECT lr.*, lt.name as leave_type, u.name as employee_name, u.full_name
       FROM leave_requests lr
       JOIN leave_types lt ON lr.leave_type_id = lt.id
+      LEFT JOIN users u ON lr.user_id = u.id
       WHERE lr.user_id = ? AND lr.is_deleted = FALSE
     `;
     const params = [req.user.id];
@@ -123,6 +181,7 @@ export const getMyLeaves = async (req, res) => {
 
     res.json({ success: true, data: leaves });
   } catch (error) {
+    console.error('Get my leaves error:', error);
     res.status(500).json({ success: false, message: 'Failed to fetch leaves', error: error.message });
   }
 };
@@ -150,14 +209,17 @@ export const getLeaveById = async (req, res) => {
 
 export const getAllLeaves = async (req, res) => {
   try {
-    const { page = 1, limit = 10, status, employee, startDate } = req.query;
+    const { page = 1, limit = 20, status, employee, startDate } = req.query;
     const offset = (page - 1) * limit;
 
     let query = `
-      SELECT lr.*, lt.name as leave_type, e.full_name as employee_name, d.name as department_name
+      SELECT lr.*, lt.name as leave_type, 
+             COALESCE(u.name, u.full_name, 'Unknown') as employee_name,
+             d.name as department_name
       FROM leave_requests lr
       JOIN leave_types lt ON lr.leave_type_id = lt.id
-      JOIN employees e ON lr.employee_id = e.id
+      LEFT JOIN users u ON lr.user_id = u.id
+      LEFT JOIN employees e ON lr.employee_id = e.id
       LEFT JOIN departments d ON e.department_id = d.id
       WHERE lr.is_deleted = FALSE
     `;
@@ -180,7 +242,7 @@ export const getAllLeaves = async (req, res) => {
 
     const countQuery = query.replace(/SELECT.*FROM/, 'SELECT COUNT(*) as total FROM');
     const [countResult] = await pool.query(countQuery, params);
-    const total = countResult[0].total;
+    const total = countResult[0]?.total || 0;
 
     query += ' ORDER BY lr.applied_at DESC LIMIT ? OFFSET ?';
     params.push(parseInt(limit), parseInt(offset));
@@ -193,6 +255,7 @@ export const getAllLeaves = async (req, res) => {
       pagination: { page: parseInt(page), limit: parseInt(limit), total, totalPages: Math.ceil(total / limit) },
     });
   } catch (error) {
+    console.error('Get all leaves error:', error);
     res.status(500).json({ success: false, message: 'Failed to fetch leaves', error: error.message });
   }
 };
@@ -374,6 +437,7 @@ export const getLeaveBalance = async (req, res) => {
   try {
     const { year = new Date().getFullYear() } = req.query;
 
+    // First check if balance exists
     const [balance] = await pool.query(
       `SELECT lb.*, lt.name as leave_type, lt.code
        FROM leave_balances lb
@@ -382,8 +446,37 @@ export const getLeaveBalance = async (req, res) => {
       [req.user.id, year]
     );
 
+    // If no balance exists, initialize it with default leave types
+    if (balance.length === 0) {
+      const [leaveTypes] = await pool.query(
+        `SELECT id, max_days_per_year FROM leave_types WHERE status = 'ACTIVE' AND is_deleted = FALSE`
+      );
+
+      // Initialize balances for each leave type
+      for (const lt of leaveTypes) {
+        await pool.query(
+          `INSERT INTO leave_balances (user_id, leave_type_id, year, opening_balance, allocated_days, used_days, pending_days)
+           VALUES (?, ?, ?, 0, ?, 0, 0)
+           ON DUPLICATE KEY UPDATE allocated_days = ?`,
+          [req.user.id, lt.id, year, lt.max_days_per_year || 12, lt.max_days_per_year || 12]
+        );
+      }
+
+      // Re-fetch the balance
+      const [newBalance] = await pool.query(
+        `SELECT lb.*, lt.name as leave_type, lt.code
+         FROM leave_balances lb
+         JOIN leave_types lt ON lb.leave_type_id = lt.id
+         WHERE lb.user_id = ? AND lb.year = ?`,
+        [req.user.id, year]
+      );
+
+      return res.json({ success: true, data: newBalance });
+    }
+
     res.json({ success: true, data: balance });
   } catch (error) {
+    console.error('Get leave balance error:', error);
     res.status(500).json({ success: false, message: 'Failed to fetch leave balance', error: error.message });
   }
 };
