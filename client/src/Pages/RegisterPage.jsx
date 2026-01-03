@@ -194,36 +194,13 @@ const RegisterPage = () => {
                 <div className="auth-shape auth-shape-3"></div>
             </div>
 
-            {/* Navbar */}
-            <nav className="auth-navbar">
-                <Link to="/" className="auth-logo">
-                    <div className="logo-icon">
-                        <span className="logo-initials">DF</span>
-                    </div>
-                    <span className="logo-text">Day Flow</span>
-                </Link>
-                <Link to="/login" className="home-btn">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                        <path d="M15 3H19C19.5304 3 20.0391 3.21071 20.4142 3.58579C20.7893 3.96086 21 4.46957 21 5V19C21 19.5304 20.7893 20.0391 20.4142 20.4142C20.0391 20.7893 19.5304 21 19 21H15" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                        <path d="M10 17L15 12L10 7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                        <path d="M15 12H3" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                    </svg>
-                    Login
-                </Link>
-            </nav>
-
             {/* Main Content */}
             <div className="auth-container">
                 <div className="auth-card auth-card-register animate-slide-up">
                     {/* Card Header */}
                     <div className="auth-header">
-                        <div className="auth-icon-wrapper">
-                            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                <path d="M16 21V19C16 17.9391 15.5786 16.9217 14.8284 16.1716C14.0783 15.4214 13.0609 15 12 15H5C3.93913 15 2.92172 15.4214 2.17157 16.1716C1.42143 16.9217 1 17.9391 1 19V21" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                                <circle cx="8.5" cy="7" r="4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                                <line x1="20" y1="8" x2="20" y2="14" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                                <line x1="23" y1="11" x2="17" y2="11" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                            </svg>
+                        <div className="auth-logo-card">
+                            <span>DF</span>
                         </div>
                         <h1 className="auth-title">Register New Employee</h1>
                         <p className="auth-subtitle">Create employee account and send invite</p>
