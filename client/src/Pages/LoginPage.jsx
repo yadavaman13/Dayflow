@@ -8,7 +8,7 @@ const LoginPage = () => {
     const navigate = useNavigate();
     const location = useLocation();
     const [formData, setFormData] = useState({
-        email: '',
+        loginId: '',
         password: '',
         rememberMe: false
     });
@@ -21,10 +21,8 @@ const LoginPage = () => {
     const redirectMessage = location.state?.message;
 
     // Validation functions
-    const validateEmail = (email) => {
-        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-        if (!email) return 'Email is required';
-        if (!emailRegex.test(email)) return 'Please enter a valid email address';
+    const validateLoginId = (loginId) => {
+        if (!loginId) return 'Employee ID or Email is required';
         return '';
     };
 
@@ -36,7 +34,7 @@ const LoginPage = () => {
 
     const validateForm = () => {
         const newErrors = {
-            email: validateEmail(formData.email),
+            loginId: validateLoginId(formData.loginId),
             password: validatePassword(formData.password)
         };
         setErrors(newErrors);
@@ -49,8 +47,8 @@ const LoginPage = () => {
 
         // Real-time validation for touched fields
         if (touched[name]) {
-            if (name === 'email') {
-                setErrors(prev => ({ ...prev, email: validateEmail(value) }));
+            if (name === 'loginId') {
+                setErrors(prev => ({ ...prev, loginId: validateLoginId(value) }));
             } else if (name === 'password') {
                 setErrors(prev => ({ ...prev, password: validatePassword(value) }));
             }
@@ -61,8 +59,8 @@ const LoginPage = () => {
         const { name, value } = e.target;
         setTouched(prev => ({ ...prev, [name]: true }));
 
-        if (name === 'email') {
-            setErrors(prev => ({ ...prev, email: validateEmail(value) }));
+        if (name === 'loginId') {
+            setErrors(prev => ({ ...prev, loginId: validateLoginId(value) }));
         } else if (name === 'password') {
             setErrors(prev => ({ ...prev, password: validatePassword(value) }));
         }
@@ -72,7 +70,7 @@ const LoginPage = () => {
         e.preventDefault();
 
         // Mark all fields as touched
-        setTouched({ email: true, password: true });
+        setTouched({ loginId: true, password: true });
 
         if (!validateForm()) return;
 
@@ -82,7 +80,7 @@ const LoginPage = () => {
         try {
             // Call the actual login API
             const response = await authAPI.login({
-                email: formData.email,
+                loginId: formData.loginId,
                 password: formData.password,
                 rememberMe: formData.rememberMe
             });
@@ -104,7 +102,7 @@ const LoginPage = () => {
                 }));
             }
         } catch (error) {
-            const errorMessage = error.response?.data?.message || 'Invalid email or password. Please try again.';
+            const errorMessage = error.response?.data?.message || 'Invalid credentials. Please try again.';
             setErrors(prev => ({
                 ...prev,
                 submit: errorMessage
@@ -198,28 +196,28 @@ const LoginPage = () => {
                             </div>
                         )}
 
-                        {/* Email Field */}
-                        <div className={`form-group ${errors.email && touched.email ? 'has-error' : ''} ${formData.email && !errors.email ? 'is-valid' : ''}`}>
-                            <label htmlFor="email" className="form-label">
+                        {/* Login ID Field (Employee ID or Email) */}
+                        <div className={`form-group ${errors.loginId && touched.loginId ? 'has-error' : ''} ${formData.loginId && !errors.loginId ? 'is-valid' : ''}`}>
+                            <label htmlFor="loginId" className="form-label">
                                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                    <path d="M4 4H20C21.1 4 22 4.9 22 6V18C22 19.1 21.1 20 20 20H4C2.9 20 2 19.1 2 18V6C2 4.9 2.9 4 4 4Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                                    <path d="M22 6L12 13L2 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                                    <path d="M20 21V19C20 17.9391 19.5786 16.9217 18.8284 16.1716C18.0783 15.4214 17.0609 15 16 15H8C6.93913 15 5.92172 15.4214 5.17157 16.1716C4.42143 16.9217 4 17.9391 4 19V21" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                                    <circle cx="12" cy="7" r="4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
                                 </svg>
-                                Email Address
+                                Employee ID or Email
                             </label>
                             <div className="input-wrapper">
                                 <input
-                                    type="email"
-                                    id="email"
-                                    name="email"
+                                    type="text"
+                                    id="loginId"
+                                    name="loginId"
                                     className="form-input"
-                                    placeholder="Enter your email"
-                                    value={formData.email}
+                                    placeholder="Enter Employee ID or Email"
+                                    value={formData.loginId}
                                     onChange={handleChange}
                                     onBlur={handleBlur}
-                                    autoComplete="email"
+                                    autoComplete="username"
                                 />
-                                {formData.email && !errors.email && (
+                                {formData.loginId && !errors.loginId && (
                                     <span className="input-icon valid">
                                         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                                             <path d="M20 6L9 17L4 12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
@@ -227,8 +225,8 @@ const LoginPage = () => {
                                     </span>
                                 )}
                             </div>
-                            {errors.email && touched.email && (
-                                <span className="form-error">{errors.email}</span>
+                            {errors.loginId && touched.loginId && (
+                                <span className="form-error">{errors.loginId}</span>
                             )}
                         </div>
 
@@ -316,7 +314,7 @@ const LoginPage = () => {
                         </button>
                     </form>
 
-                    {/* Footer */}
+                    {/* Footer */}   {/*remove */}
                     <div className="auth-footer">
                         <p>Don't have an account? <Link to="/register" className="auth-link">Register here</Link></p>
                     </div>
