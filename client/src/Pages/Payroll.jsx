@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
-import api from "../api/axios";
-import Toast from "../components/Toast";
-import CreatePayrunModal from "../components/payroll/CreatePayrunModal";
+import api from "../services/api";
+import Toast from "../Components/Toast";
+import CreatePayrunModal from "../Components/payroll/CreatePayrunModal";
 
 export default function Payroll() {
   const [activeTab, setActiveTab] = useState("dashboard");
