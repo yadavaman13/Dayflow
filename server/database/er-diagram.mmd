@@ -1,0 +1,795 @@
+erDiagram
+
+    attendance_approvals {
+        bigint id PK
+        bigint attendance_record_id 
+        bigint requested_by 
+        datetime requested_at 
+        text requested_reason 
+        varchar status 
+        bigint reviewed_by 
+        datetime reviewed_at 
+        text review_comments 
+    }
+
+    attendance_calculations {
+        bigint id PK
+        bigint attendance_id UK "FK to attendance_records"
+        int work_minutes  "Actual work time in minutes (e.g., 540 = 9h)"
+        int extra_minutes  "Overtime in minutes (e.g., 60 = 1h)"
+        int shift_minutes  "Expected shift duration in minutes"
+        int break_minutes  "Break time in minutes"
+        datetime calculated_at 
+    }
+
+    attendance_locations {
+        bigint id PK
+        bigint attendance_record_id 
+        varchar location_type 
+        datetime timestamp 
+        decimal latitude 
+        decimal longitude 
+        text address 
+        int accuracy_meters 
+        datetime created_at 
+    }
+
+    attendance_modes {
+        bigint id PK
+        varchar name UK
+        text description 
+        tinyint is_remote 
+        tinyint requires_location 
+        tinyint requires_approval 
+        varchar status 
+        datetime created_at 
+        datetime updated_at 
+    }
+
+    attendance_monthly_summary {
+        bigint id PK
+        bigint user_id 
+        bigint employee_id  "Denormalized for reporting"
+        int year 
+        int month 
+        decimal present_days  "Total present days including half days"
+        decimal leave_days  "Approved leave days"
+        decimal absent_days  "Absent without leave"
+        int total_working_days  "Expected working days in month"
+        decimal payable_days  "Days to be paid for salary"
+        decimal total_work_hours  "Sum of working hours"
+        decimal total_overtime_hours  "Sum of overtime"
+        datetime generated_at 
+        datetime updated_at 
+    }
+
+    attendance_records {
+        bigint id PK
+        bigint employee_id 
+        bigint user_id  "FK to users for quick profile lookup"
+        date attendance_date 
+        datetime check_in 
+        json check_in_location  "GPS coordinates, address"
+        varchar check_in_ip 
+        varchar check_in_device 
+        datetime check_out 
+        json check_out_location  "GPS coordinates, address"
+        varchar check_out_ip 
+        varchar check_out_device 
+        bigint mode_id  "Office/Remote/Field/Onsite"
+        varchar status 
+        varchar payable_status  "Payability status for salary calculation"
+        decimal payable_day_value  "1.0=full day, 0.5=half day, 0=unpaid"
+        decimal working_hours  "Calculated hours"
+        decimal overtime_hours 
+        decimal break_hours 
+        tinyint suspicious  "Flagged by system"
+        text suspicious_reason 
+        text remarks 
+        bigint approved_by 
+        datetime approved_at 
+        datetime created_at 
+        datetime updated_at 
+        tinyint is_deleted 
+        datetime deleted_at 
+    }
+
+    audit_logs {
+        bigint id PK
+        bigint actor_user_id 
+        varchar action  "CREATE, UPDATE, DELETE, APPROVE, etc."
+        varchar target_table 
+        bigint target_id 
+        json before_state  "Record state before change"
+        json after_state  "Record state after change"
+        json changes  "Diff of what changed"
+        varchar ip_address 
+        datetime occurred_at 
+    }
+
+    companies {
+        bigint id PK
+        varchar name 
+        varchar registration_number UK
+        varchar tax_id 
+        text address 
+        varchar city 
+        varchar state 
+        varchar country 
+        varchar postal_code 
+        varchar phone 
+        varchar email 
+        varchar website 
+        text logo_url 
+        date established_date 
+        varchar status 
+        datetime created_at 
+        datetime updated_at 
+        tinyint is_deleted 
+        datetime deleted_at 
+    }
+
+    departments {
+        bigint id PK
+        bigint company_id 
+        bigint office_id 
+        varchar name 
+        varchar code 
+        text description 
+        bigint head_employee_id  "Department head/manager"
+        bigint parent_department_id  "For hierarchical departments"
+        varchar status 
+        datetime created_at 
+        datetime updated_at 
+        tinyint is_deleted 
+        datetime deleted_at 
+    }
+
+    employee_about {
+        bigint id PK
+        bigint user_id UK
+        text about  "About me / Bio"
+        text about_job  "What I love about my job"
+        text interests_hobbies  "Personal interests and hobbies"
+        datetime created_at 
+        datetime updated_at 
+    }
+
+    employee_bank_details {
+        bigint id PK
+        bigint user_id UK
+        varchar account_number 
+        varchar bank_name 
+        varchar ifsc_code 
+        varchar bank_branch  "Branch name/location"
+        varchar pan_number UK
+        varchar uan_number  "Universal Account Number (EPFO)"
+        varchar epf_code  "Employee Provident Fund Code"
+        datetime created_at 
+        datetime updated_at 
+    }
+
+    employee_basic_profile {
+        bigint id PK
+        bigint user_id UK
+        text profile_photo_url 
+        varchar job_position  "Designation/Title"
+        varchar company 
+        varchar department 
+        varchar manager_name 
+        varchar location 
+        varchar mobile 
+        datetime created_at 
+        datetime updated_at 
+    }
+
+    employee_certifications {
+        bigint id PK
+        bigint user_id 
+        varchar certification_name 
+        varchar issued_by  "Issuing organization"
+        date issue_date 
+        date expiry_date 
+        varchar credential_id  "Certificate ID or credential number"
+        text credential_url  "Verification URL"
+        datetime created_at 
+        datetime updated_at 
+    }
+
+    employee_documents {
+        bigint id PK
+        bigint user_id 
+        varchar doc_type  "Type of document"
+        varchar file_name  "Original filename"
+        text file_url  "Storage URL/path"
+        bigint file_size  "File size in bytes"
+        varchar mime_type  "File MIME type"
+        bigint uploaded_by  "Who uploaded this document"
+        datetime uploaded_at 
+        tinyint is_verified  "Document verification status"
+        bigint verified_by 
+        datetime verified_at 
+        datetime created_at 
+        datetime updated_at 
+    }
+
+    employee_private_info {
+        bigint id PK
+        bigint user_id UK
+        date date_of_birth 
+        text residing_address 
+        varchar nationality 
+        varchar personal_email 
+        varchar gender 
+        varchar marital_status 
+        date date_of_joining 
+        datetime created_at 
+        datetime updated_at 
+    }
+
+    employee_skills {
+        bigint id PK
+        bigint user_id 
+        varchar skill_name 
+        varchar proficiency_level  "Beginner, Intermediate, Advanced, Expert"
+        decimal years_of_experience  "Years of experience with this skill"
+        datetime created_at 
+        datetime updated_at 
+    }
+
+    employees {
+        bigint id PK
+        varchar employee_code UK
+        bigint company_id 
+        bigint office_id 
+        bigint department_id 
+        varchar first_name 
+        varchar middle_name 
+        varchar last_name 
+        varchar full_name 
+        date date_of_birth 
+        varchar gender 
+        varchar marital_status 
+        varchar blood_group 
+        varchar nationality 
+        varchar personal_email 
+        varchar work_email 
+        varchar phone_primary 
+        varchar phone_secondary 
+        varchar emergency_contact_name 
+        varchar emergency_contact_phone 
+        varchar emergency_contact_relation 
+        text current_address 
+        varchar current_city 
+        varchar current_state 
+        varchar current_country 
+        varchar current_postal_code 
+        text permanent_address 
+        varchar permanent_city 
+        varchar permanent_state 
+        varchar permanent_country 
+        varchar permanent_postal_code 
+        tinyint same_as_current 
+        varchar designation 
+        varchar employment_type 
+        varchar employee_status 
+        date date_of_joining 
+        date date_of_confirmation 
+        date date_of_leaving 
+        int probation_period_months 
+        int notice_period_days 
+        bigint reporting_manager_id  "Reports to employee"
+        varchar work_location 
+        varchar shift_timing 
+        varchar pan_number UK
+        varchar aadhaar_number UK
+        varchar passport_number 
+        date passport_expiry 
+        varchar driving_license 
+        varchar bank_name 
+        varchar bank_account_number 
+        varchar bank_ifsc_code 
+        varchar bank_branch 
+        text profile_photo_url 
+        text resume_url 
+        json documents  "Array of document URLs and metadata"
+        bigint created_by 
+        datetime created_at 
+        datetime updated_at 
+        tinyint is_deleted 
+        datetime deleted_at 
+        bigint deleted_by 
+    }
+
+    hard_delete_logs {
+        bigint id PK
+        bigint actor_user_id 
+        varchar target_table 
+        bigint target_id 
+        json record_snapshot  "Full record before deletion"
+        text reason  "Mandatory justification"
+        varchar approval_reference  "Ticket/approval ID"
+        datetime deleted_at 
+    }
+
+    leave_approvals {
+        bigint id PK
+        bigint leave_request_id 
+        bigint approver_id 
+        int approval_level  "Multi-level approval support"
+        varchar status 
+        text comments 
+        datetime approved_at 
+        datetime rejected_at 
+        datetime created_at 
+        datetime updated_at 
+    }
+
+    leave_balances {
+        bigint id PK
+        bigint user_id 
+        bigint employee_id  "Denormalized for reporting"
+        bigint leave_type_id 
+        int year 
+        decimal opening_balance  "Balance at start of year"
+        decimal allocated_days  "Annual allocation for this type"
+        decimal used_days  "Days already taken"
+        decimal pending_days  "Days in pending requests"
+        decimal remaining_days 
+        decimal carryforward_days  "Days carried from previous year"
+        decimal encashed_days  "Days encashed"
+        datetime last_updated 
+        datetime created_at 
+    }
+
+    leave_requests {
+        bigint id PK
+        bigint employee_id 
+        bigint user_id  "FK to users for quick profile lookup"
+        bigint leave_type_id 
+        date start_date 
+        date end_date 
+        decimal total_days  "Can be half-day"
+        text reason 
+        text supporting_document_url 
+        tinyint attachment_required  "Whether attachment is required for this request"
+        varchar status 
+        varchar pay_type  "Whether leave is paid or unpaid"
+        datetime applied_at 
+        datetime cancelled_at 
+        text cancellation_reason 
+        datetime created_at 
+        datetime updated_at 
+        tinyint is_deleted 
+        datetime deleted_at 
+    }
+
+    leave_types {
+        bigint id PK
+        bigint company_id 
+        varchar name 
+        varchar code 
+        text description 
+        tinyint is_paid 
+        tinyint is_encashable 
+        tinyint is_carryforward 
+        int max_carryforward_days 
+        int max_days_per_year 
+        int max_consecutive_days 
+        int min_days_notice 
+        tinyint requires_approval 
+        tinyint requires_document 
+        varchar accrual_frequency 
+        decimal accrual_rate  "Days per accrual period"
+        varchar applicable_gender 
+        int applicable_after_months  "Probation period"
+        varchar status 
+        int display_order 
+        datetime created_at 
+        datetime updated_at 
+        tinyint is_deleted 
+        datetime deleted_at 
+    }
+
+    offices {
+        bigint id PK
+        bigint company_id 
+        varchar name 
+        varchar code UK
+        varchar office_type 
+        text address 
+        varchar city 
+        varchar state 
+        varchar country 
+        varchar postal_code 
+        varchar phone 
+        varchar email 
+        decimal latitude 
+        decimal longitude 
+        int geofence_radius  "In meters for attendance tracking"
+        varchar wifi_ssid  "For Wi-Fi based attendance"
+        varchar timezone 
+        varchar status 
+        datetime created_at 
+        datetime updated_at 
+        tinyint is_deleted 
+        datetime deleted_at 
+    }
+
+    roles {
+        bigint id PK
+        varchar name UK
+        varchar display_name 
+        text description 
+        json permissions  "Array of permission strings"
+        tinyint is_system_role  "Cannot be deleted"
+        datetime created_at 
+        datetime updated_at 
+        tinyint is_deleted 
+        datetime deleted_at 
+    }
+
+    salary_component_types {
+        bigint id PK
+        varchar name UK "Basic, HRA, DA, Conveyance, etc."
+        text description 
+        varchar component_code UK "Short code like BASIC, HRA, DA"
+        varchar default_mode  "How this component is typically calculated"
+        decimal default_value  "Default percentage or fixed amount"
+        varchar component_category  "EARNING, DEDUCTION, CONTRIBUTION"
+        tinyint is_taxable 
+        tinyint is_statutory  "PF, ESI, etc."
+        tinyint is_active 
+        int display_order 
+        datetime created_at 
+        datetime updated_at 
+    }
+
+    salary_components {
+        bigint id PK
+        bigint salary_structure_id 
+        bigint component_type_id  "FK to salary_component_types for reusable definitions"
+        varchar component_type 
+        varchar component_name 
+        varchar component_code 
+        varchar calculation_type 
+        varchar computation_mode  "Alias for calculation_type: PERCENT, FIXED"
+        decimal amount 
+        decimal value_fixed  "Alias for amount"
+        decimal percentage  "If percentage-based"
+        decimal value_percent  "Higher precision percentage (e.g., 50.000)"
+        text formula  "If formula-based"
+        decimal computed_amount  "Auto-calculated final amount"
+        tinyint is_taxable 
+        tinyint is_statutory 
+        int display_order 
+        datetime created_at 
+    }
+
+    salary_contributions {
+        bigint id PK
+        bigint salary_structure_id 
+        varchar name  "Employee PF, Employer PF, ESI, etc."
+        varchar contribution_type  "EMPLOYEE, EMPLOYER"
+        decimal rate_percent  "Percentage rate (e.g., 12.000 for 12%)"
+        varchar base_component  "Component to calculate from (usually BASIC)"
+        decimal amount  "Calculated contribution amount"
+        tinyint is_statutory  "Mandatory by law"
+        datetime created_at 
+        datetime updated_at 
+    }
+
+    salary_deductions {
+        bigint id PK
+        bigint salary_structure_id 
+        varchar name  "Professional Tax, TDS, Loan EMI, etc."
+        varchar deduction_type  "STATUTORY, LOAN, ADVANCE, OTHER"
+        decimal amount 
+        varchar frequency  "How often this deduction applies"
+        tinyint is_taxable  "Whether this reduces taxable income"
+        text remarks 
+        datetime created_at 
+        datetime updated_at 
+    }
+
+    salary_slips {
+        bigint id PK
+        bigint employee_id 
+        bigint salary_structure_id 
+        date salary_month  "First day of salary month"
+        date payment_date 
+        int working_days 
+        decimal present_days 
+        decimal leave_days 
+        decimal absent_days 
+        decimal gross_salary 
+        decimal total_earnings 
+        decimal total_deductions 
+        decimal net_salary 
+        decimal tax_deducted 
+        decimal provident_fund 
+        decimal professional_tax 
+        json components  "Snapshot of all salary components"
+        varchar status 
+        varchar payment_mode 
+        varchar payment_reference 
+        text remarks 
+        bigint generated_by 
+        datetime generated_at 
+        bigint approved_by 
+        datetime approved_at 
+        bigint paid_by 
+        datetime paid_at 
+        datetime created_at 
+        datetime updated_at 
+    }
+
+    salary_structures {
+        bigint id PK
+        bigint employee_id 
+        bigint user_id  "FK to users for quick profile lookup"
+        date effective_from 
+        date effective_to  "NULL means currently active"
+        varchar designation 
+        varchar pay_grade 
+        decimal basic_salary 
+        decimal wage_amount  "Alias for basic_salary for compatibility"
+        varchar wage_type  "fixed or monthly"
+        varchar currency 
+        varchar pay_frequency 
+        int working_days_per_week  "Usually 5 or 6 days"
+        decimal break_time_hours  "Daily break time in hours"
+        varchar status 
+        text remarks 
+        bigint approved_by 
+        datetime approved_at 
+        bigint created_by 
+        datetime created_at 
+        datetime updated_at 
+    }
+
+    security_activity_log {
+        bigint id PK
+        bigint user_id 
+        varchar event_type  "login, logout, password_change, device_login, etc."
+        text event_details  "Additional event information"
+        varchar ip_address 
+        text user_agent 
+        varchar device_info 
+        varchar location_info  "Geo-location if available"
+        datetime event_time 
+    }
+
+    time_off_attachments {
+        bigint id PK
+        bigint request_id  "FK to leave_requests"
+        text file_url  "Storage URL/path for uploaded file"
+        varchar file_name  "Original filename"
+        bigint file_size  "File size in bytes"
+        varchar mime_type  "File MIME type"
+        bigint uploaded_by  "User who uploaded the file"
+        datetime uploaded_at 
+        datetime created_at 
+    }
+
+    user_activity_logs {
+        bigint id PK
+        bigint user_id 
+        varchar action  "LOGIN, LOGOUT, VIEW, EDIT, etc."
+        varchar entity_name  "Table/module name"
+        bigint entity_id  "Record ID"
+        varchar ip_address 
+        text user_agent 
+        varchar request_method 
+        text request_url 
+        json metadata  "Additional context"
+        datetime occurred_at 
+    }
+
+    user_roles {
+        bigint id PK
+        bigint user_id 
+        bigint role_id 
+        datetime assigned_at 
+        bigint assigned_by 
+    }
+
+    users {
+        bigint id PK
+        varchar employee_id UK
+        bigint employee_table_id UK "FK to employees.id for profile data"
+        varchar name 
+        varchar full_name  "Display name for UI"
+        varchar email UK
+        varchar phone 
+        text profile_url 
+        int joining_year  "Year when employee joined the company"
+        varchar password_hash 
+        varchar role 
+        varchar status 
+        tinyint is_first_login 
+        tinyint email_verified 
+        varchar reset_token 
+        datetime reset_token_expiry 
+        bigint created_by  "HR who created this user account"
+        datetime created_at 
+        datetime updated_at 
+        tinyint is_deleted 
+        datetime deleted_at 
+    }
+
+    v_active_employees {
+        bigint id 
+        varchar employee_code 
+        bigint company_id 
+        bigint office_id 
+        bigint department_id 
+        varchar first_name 
+        varchar middle_name 
+        varchar last_name 
+        varchar full_name 
+        date date_of_birth 
+        varchar gender 
+        varchar marital_status 
+        varchar blood_group 
+        varchar nationality 
+        varchar personal_email 
+        varchar work_email 
+        varchar phone_primary 
+        varchar phone_secondary 
+        varchar emergency_contact_name 
+        varchar emergency_contact_phone 
+        varchar emergency_contact_relation 
+        text current_address 
+        varchar current_city 
+        varchar current_state 
+        varchar current_country 
+        varchar current_postal_code 
+        text permanent_address 
+        varchar permanent_city 
+        varchar permanent_state 
+        varchar permanent_country 
+        varchar permanent_postal_code 
+        tinyint same_as_current 
+        varchar designation 
+        varchar employment_type 
+        varchar employee_status 
+        date date_of_joining 
+        date date_of_confirmation 
+        date date_of_leaving 
+        int probation_period_months 
+        int notice_period_days 
+        bigint reporting_manager_id  "Reports to employee"
+        varchar work_location 
+        varchar shift_timing 
+        varchar pan_number 
+        varchar aadhaar_number 
+        varchar passport_number 
+        date passport_expiry 
+        varchar driving_license 
+        varchar bank_name 
+        varchar bank_account_number 
+        varchar bank_ifsc_code 
+        varchar bank_branch 
+        text profile_photo_url 
+        text resume_url 
+        json documents  "Array of document URLs and metadata"
+        bigint created_by 
+        datetime created_at 
+        datetime updated_at 
+        tinyint is_deleted 
+        datetime deleted_at 
+        bigint deleted_by 
+        varchar login_email 
+        varchar user_status 
+        varchar company_name 
+        varchar office_name 
+        varchar department_name 
+        varchar manager_name 
+    }
+
+    v_current_salaries {
+        bigint id 
+        bigint employee_id 
+        varchar employee_code 
+        varchar full_name 
+        decimal basic_salary 
+        date effective_from 
+        varchar pay_frequency 
+        varchar status 
+    }
+
+    v_pending_leaves {
+        bigint id 
+        bigint employee_id 
+        varchar employee_code 
+        varchar full_name 
+        varchar leave_type 
+        date start_date 
+        date end_date 
+        decimal total_days  "Can be half-day"
+        text reason 
+        datetime applied_at 
+        varchar status 
+    }
+
+    v_today_attendance {
+        bigint employee_id 
+        varchar employee_code 
+        varchar full_name 
+        bigint department_id 
+        varchar department_name 
+        date attendance_date 
+        datetime check_in 
+        datetime check_out 
+        varchar status 
+        decimal working_hours  "Calculated hours"
+        tinyint suspicious  "Flagged by system"
+    }
+
+
+    %% Relationships
+    attendance_records }o--|| attendance_approvals : "attendance_record_id"
+    users ||--o{ attendance_approvals : "requested_by"
+    users ||--o{ attendance_approvals : "reviewed_by"
+    attendance_records }o--|| attendance_calculations : "attendance_id"
+    attendance_records }o--|| attendance_locations : "attendance_record_id"
+    users }o--|| attendance_monthly_summary : "user_id"
+    employees }o--|| attendance_monthly_summary : "employee_id"
+    employees }o--|| attendance_records : "employee_id"
+    users }o--|| attendance_records : "user_id"
+    attendance_modes }o--|| attendance_records : "mode_id"
+    users ||--o{ attendance_records : "approved_by"
+    users }o--|| audit_logs : "actor_user_id"
+    companies }o--|| departments : "company_id"
+    offices }o--|| departments : "office_id"
+    departments }o--|| departments : "parent_department_id"
+    employees }o--|| departments : "head_employee_id"
+    users }o--|| employee_about : "user_id"
+    users }o--|| employee_bank_details : "user_id"
+    users }o--|| employee_basic_profile : "user_id"
+    users }o--|| employee_certifications : "user_id"
+    users }o--|| employee_documents : "user_id"
+    users ||--o{ employee_documents : "uploaded_by"
+    users ||--o{ employee_documents : "verified_by"
+    users }o--|| employee_private_info : "user_id"
+    users }o--|| employee_skills : "user_id"
+    companies }o--|| employees : "company_id"
+    offices }o--|| employees : "office_id"
+    departments }o--|| employees : "department_id"
+    employees }o--|| employees : "reporting_manager_id"
+    users ||--o{ employees : "created_by"
+    users ||--o{ employees : "deleted_by"
+    users }o--|| hard_delete_logs : "actor_user_id"
+    leave_requests }o--|| leave_approvals : "leave_request_id"
+    users }o--|| leave_approvals : "approver_id"
+    users }o--|| leave_balances : "user_id"
+    employees }o--|| leave_balances : "employee_id"
+    leave_types }o--|| leave_balances : "leave_type_id"
+    employees }o--|| leave_requests : "employee_id"
+    users }o--|| leave_requests : "user_id"
+    leave_types }o--|| leave_requests : "leave_type_id"
+    companies }o--|| leave_types : "company_id"
+    companies }o--|| offices : "company_id"
+    salary_structures }o--|| salary_components : "salary_structure_id"
+    salary_component_types }o--|| salary_components : "component_type_id"
+    salary_structures }o--|| salary_contributions : "salary_structure_id"
+    salary_structures }o--|| salary_deductions : "salary_structure_id"
+    employees }o--|| salary_slips : "employee_id"
+    salary_structures }o--|| salary_slips : "salary_structure_id"
+    users ||--o{ salary_slips : "generated_by"
+    users ||--o{ salary_slips : "approved_by"
+    users ||--o{ salary_slips : "paid_by"
+    employees }o--|| salary_structures : "employee_id"
+    users }o--|| salary_structures : "user_id"
+    users ||--o{ salary_structures : "approved_by"
+    users ||--o{ salary_structures : "created_by"
+    users }o--|| security_activity_log : "user_id"
+    leave_requests }o--|| time_off_attachments : "request_id"
+    users ||--o{ time_off_attachments : "uploaded_by"
+    users }o--|| user_activity_logs : "user_id"
+    users }o--|| user_roles : "user_id"
+    roles }o--|| user_roles : "role_id"
+    users ||--o{ user_roles : "assigned_by"
+    users ||--o{ users : "created_by"
+    employees }o--|| users : "employee_table_id"

@@ -1,9 +1,18 @@
 import { useState, useEffect } from "react";
-// import api from "../api/axios";
-import Toast from "../components/Toast";
-import CreatePayrunModal from "../components/payroll/CreatePayrunModal";
+import api from "../api/axios";
+import Toast from "../Components/Toast";
+import CreatePayrunModal from "../Components/payroll/CreatePayrunModal";
 
 export default function Payroll() {
+  // Check authentication on mount
+  useEffect(() => {
+    const token = localStorage.getItem('token');
+    console.log('Token exists:', !!token);
+    if (!token) {
+      console.warn('No authentication token found! Please log in.');
+    }
+  }, []);
+
   const [activeTab, setActiveTab] = useState("dashboard");
   const [selectedMonth, setSelectedMonth] = useState("Oct 2025");
   const [showValidateModal, setShowValidateModal] = useState(false);
@@ -46,12 +55,15 @@ export default function Payroll() {
   const fetchDashboardData = async () => {
     try {
       setLoading(true);
+      console.log('Fetching dashboard data...');
       const response = await api.get('/payroll/dashboard');
+      console.log('Dashboard response:', response.data);
       if (response.data.success) {
         setDashboardData(response.data.data);
       }
     } catch (error) {
       console.error('Error fetching dashboard data:', error);
+      console.error('Error response:', error.response);
       setToast({
         type: 'error',
         message: error.response?.data?.message || 'Failed to fetch dashboard data'
@@ -63,7 +75,9 @@ export default function Payroll() {
 
   const fetchPeriods = async () => {
     try {
+      console.log('Fetching periods...');
       const response = await api.get('/payroll/periods');
+      console.log('Periods response:', response.data);
       if (response.data.success) {
         setPeriods(response.data.data);
         // Auto-select the first open/draft period
@@ -72,6 +86,7 @@ export default function Payroll() {
       }
     } catch (error) {
       console.error('Error fetching periods:', error);
+      console.error('Error response:', error.response);
       setToast({
         type: 'error',
         message: error.response?.data?.message || 'Failed to fetch payroll periods'
@@ -243,10 +258,16 @@ export default function Payroll() {
   };
 
   const handleNewPayslip = () => {
-    setToast({
-      type: 'info',
-      message: 'New Payslip functionality will be implemented'
-    });
+    console.log('New Payslip clicked');
+    console.log('Periods available:', periods);
+    console.log('Selected period:', selectedPeriod);
+    
+    if (periods.length === 0) {
+      console.warn('No periods available, fetching now...');
+      fetchPeriods();
+    }
+    
+    setShowCreateModal(true);
   };
 
   const handleCompute = async () => {
@@ -278,7 +299,7 @@ export default function Payroll() {
     if (selectedPayslip && selectedPayslip.id) {
       try {
         setLoading(true);
-        const response = await api.post(`/payroll/payslips/${selectedPayslip.id}/validate`);
+        const response = await api.put(`/payroll/payslips/${selectedPayslip.id}/validate`);
         if (response.data.success) {
           setToast({
             type: 'success',
@@ -329,6 +350,10 @@ export default function Payroll() {
   };
 
   const handleCreatePayrun = async (forceCreate = false) => {
+    console.log('Creating payrun...');
+    console.log('Selected period:', selectedPeriod);
+    console.log('Force create:', forceCreate);
+    
     if (!selectedPeriod) {
       setToast({
         type: 'error',
@@ -340,8 +365,8 @@ export default function Payroll() {
     try {
       setCreatingPayrun(true);
       const response = await api.post('/payroll/payruns', {
-        payroll_period_id: selectedPeriod,
-        force: forceCreate
+        period_id: selectedPeriod,
+        force_create: forceCreate
       });
 
       if (response.data.warnings && response.data.warnings.length > 0 && !forceCreate) {
@@ -353,25 +378,35 @@ export default function Payroll() {
       // Success
       setToast({
         type: 'success',
-        message: `Payrun created with ${response.data.data.employees_processed} employees`
+        message: response.data.message || 'Payrun created successfully'
       });
       setShowCreateModal(false);
       setPayrunWarnings([]);
+      setSelectedPeriod(null);
       
       // Refresh dashboard
       fetchDashboardData();
       
-      // Switch to payrun tab and load the new payrun
-      if (response.data.data.payrun_id) {
+      // Switch to payrun tab and load the first payslip from the response
+      if (response.data.data?.payslips?.length > 0) {
         setActiveTab('payrun');
-        fetchPayrunDetails(response.data.data.payrun_id);
+        // Use the first payslip's ID to fetch payrun details
+        const firstPayslipId = response.data.data.payslips[0].slip_id;
+        fetchPayrunDetails(firstPayslipId);
       }
     } catch (error) {
       console.error('Error creating payrun:', error);
-      setToast({
-        type: 'error',
-        message: error.response?.data?.error || 'Failed to create payrun'
-      });
+      
+      // Check if error response has warnings
+      if (error.response?.data?.warnings && !forceCreate) {
+        setPayrunWarnings(error.response.data.warnings);
+      } else {
+        setToast({
+          type: 'error',
+          message: error.response?.data?.message || 'Failed to create payrun'
+        });
+        setShowCreateModal(false);
+      }
     } finally {
       setCreatingPayrun(false);
     }
@@ -471,6 +506,64 @@ export default function Payroll() {
               The Payroll Dashboard contains warnings, pay run information, and statistics related to employee and employer costs.
             </p>
           </div>
+
+          {/* Stats Cards */}
+          {dashboardData?.stats && (
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-5">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">Total Employees</p>
+                    <p className="text-3xl font-bold text-[#A24689] mt-2">{dashboardData.stats.totalEmployees}</p>
+                  </div>
+                  <div className="bg-purple-50 p-3 rounded-lg">
+                    <svg className="w-8 h-8 text-[#A24689]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                    </svg>
+                  </div>
+                </div>
+              </div>
+              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-5">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">Processed</p>
+                    <p className="text-3xl font-bold text-green-600 mt-2">{dashboardData.stats.processedPayslips}</p>
+                  </div>
+                  <div className="bg-green-50 p-3 rounded-lg">
+                    <svg className="w-8 h-8 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                  </div>
+                </div>
+              </div>
+              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-5">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">Pending</p>
+                    <p className="text-3xl font-bold text-orange-600 mt-2">{dashboardData.stats.pendingPayslips}</p>
+                  </div>
+                  <div className="bg-orange-50 p-3 rounded-lg">
+                    <svg className="w-8 h-8 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                  </div>
+                </div>
+              </div>
+              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-5">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">Total Cost</p>
+                    <p className="text-2xl font-bold text-[#A24689] mt-2">₹{dashboardData.stats.totalCost.toLocaleString('en-IN')}</p>
+                  </div>
+                  <div className="bg-purple-50 p-3 rounded-lg">
+                    <svg className="w-8 h-8 text-[#A24689]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Warning and Payrun Cards Grid */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -608,13 +701,8 @@ export default function Payroll() {
                   </button>
                 </div>
               </div>
-              <div className="h-64 flex items-end justify-around gap-4">
-                {["Jan 2025", "Feb 2025", "Mar 2025"].map((month, index) => (
-                  <div key={month} className="flex-1 flex flex-col items-center">
-                    <div className="w-full bg-linear-to-t from-blue-300 to-blue-100 rounded-t-lg" style={{ height: `${(index + 1) * 30}%` }}></div>
-                    <p className="text-xs text-gray-600 mt-2">{month}</p>
-                  </div>
-                ))}
+              <div className="h-64 flex items-center justify-center">
+                <p className="text-sm text-gray-500">Chart data will appear here after creating payruns</p>
               </div>
             </div>
 
@@ -633,13 +721,8 @@ export default function Payroll() {
                   </button>
                 </div>
               </div>
-              <div className="h-64 flex items-end justify-around gap-4">
-                {["Jan 2025", "Feb 2025", "Mar 2025"].map((month, index) => (
-                  <div key={month} className="flex-1 flex flex-col items-center">
-                    <div className="w-full bg-linear-to-t from-blue-400 to-blue-200 rounded-t-lg" style={{ height: `${(index + 1) * 35}%` }}></div>
-                    <p className="text-xs text-gray-600 mt-2">{month}</p>
-                  </div>
-                ))}
+              <div className="h-64 flex items-center justify-center">
+                <p className="text-sm text-gray-500">Employee count trends will appear here</p>
               </div>
             </div>
           </div>

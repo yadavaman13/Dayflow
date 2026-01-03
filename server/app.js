@@ -10,6 +10,7 @@ import employeeProfileRoutes from './routes/employee-profile.routes.js';
 import attendanceRoutes from './routes/attendance.routes.js';
 import leaveRoutes from './routes/leave.routes.js';
 import salaryRoutes from './routes/salary.routes.js';
+import payrollRoutes from './routes/payroll.routes.js';
 
 const app = express();
 
@@ -29,6 +30,7 @@ app.use('/api/employee-profile', employeeProfileRoutes);
 app.use('/api/attendance', attendanceRoutes);
 app.use('/api/leave', leaveRoutes);
 app.use('/api/salary', salaryRoutes);
+app.use('/api/payroll', payrollRoutes);
 
 // Basic health check route
 app.get('/api/health', (req, res) => {

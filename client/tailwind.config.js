@@ -1,6 +1,8 @@
 /** @type {import('tailwindcss').Config} */
 export default {
   content: [
+    './index.html',
+    './src/**/*.{js,ts,jsx,tsx}',
     "./index.html",
     "./src/**/*.{js,ts,jsx,tsx}",
   ],
@@ -11,6 +13,7 @@ export default {
         primary: '#714B67',
         'primary-light': '#8a5b7d',
         'primary-dark': '#5a3c52',
+        white: '#ffffff'
       },
     },
   },

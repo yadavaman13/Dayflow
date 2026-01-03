@@ -1,407 +1,559 @@
-import pool from '../config/db.js';
-
 /**
- * SALARY MANAGEMENT CONTROLLER
+ * ============================================
+ * SALARY ENGINE CONTROLLER
+ * ============================================
+ * Handles all salary-related HTTP requests
  */
 
-export const getMySalarySlips = async (req, res) => {
-  try {
-    const { year, month, page = 1, limit = 12 } = req.query;
-    const offset = (page - 1) * limit;
+import SalaryEngine from '../services/salary.engine.js';
+import db from '../config/db.js';
 
-    // Get employee_id from user
-    const [users] = await pool.query(
-      'SELECT employee_table_id FROM users WHERE id = ?',
-      [req.user.id]
-    );
-
-    if (!users[0] || !users[0].employee_table_id) {
-      return res.status(404).json({ success: false, message: 'Employee profile not found' });
-    }
-
-    let query = 'SELECT * FROM salary_slips WHERE employee_id = ?';
-    const params = [users[0].employee_table_id];
-
-    if (year) {
-      query += ' AND YEAR(salary_month) = ?';
-      params.push(year);
-    }
-
-    if (month) {
-      query += ' AND MONTH(salary_month) = ?';
-      params.push(month);
-    }
-
-    query += ' ORDER BY salary_month DESC LIMIT ? OFFSET ?';
-    params.push(parseInt(limit), parseInt(offset));
-
-    const [slips] = await pool.query(query, params);
-
-    res.json({ success: true, data: slips });
-  } catch (error) {
-    res.status(500).json({ success: false, message: 'Failed to fetch salary slips', error: error.message });
-  }
-};
-
-export const getMyCurrentSalary = async (req, res) => {
-  try {
-    const [users] = await pool.query(
-      'SELECT employee_table_id FROM users WHERE id = ?',
-      [req.user.id]
-    );
-
-    if (!users[0] || !users[0].employee_table_id) {
-      return res.status(404).json({ success: false, message: 'Employee profile not found' });
-    }
-
-    const [structure] = await pool.query(
-      `SELECT ss.*, 
-        (SELECT JSON_ARRAYAGG(JSON_OBJECT(
-          'component_name', component_name,
-          'component_type', component_type,
-          'amount', computed_amount,
-          'is_taxable', is_taxable
-        )) FROM salary_components WHERE salary_structure_id = ss.id) as components
-       FROM salary_structures ss
-       WHERE ss.employee_id = ? AND ss.effective_to IS NULL AND ss.status = 'ACTIVE'`,
-      [users[0].employee_table_id]
-    );
-
-    if (structure.length === 0) {
-      return res.status(404).json({ success: false, message: 'No active salary structure found' });
-    }
-
-    res.json({ success: true, data: structure[0] });
-  } catch (error) {
-    res.status(500).json({ success: false, message: 'Failed to fetch salary structure', error: error.message });
-  }
-};
-
+/**
+ * Create new salary structure
+ * POST /api/salary/structure
+ */
 export const createSalaryStructure = async (req, res) => {
-  const connection = await pool.getConnection();
-  
-  try {
-    await connection.beginTransaction();
+    try {
+        const {
+            employee_id,
+            user_id,
+            effective_from,
+            designation,
+            pay_grade,
+            wage_amount,
+            wage_type,
+            pay_frequency,
+            working_days_per_week,
+            break_time_hours,
+            component_type_ids, // Array of component type IDs to include
+            approved_by
+        } = req.body;
 
-    const {
-      employee_id,
-      effective_from,
-      basic_salary,
-      designation,
-      pay_frequency,
-      components = [],
-    } = req.body;
+        // Validation
+        if (!employee_id || !wage_amount || !component_type_ids || component_type_ids.length === 0) {
+            return res.status(400).json({
+                success: false,
+                message: 'Missing required fields: employee_id, wage_amount, component_type_ids'
+            });
+        }
 
-    if (!employee_id || !effective_from || !basic_salary) {
-      return res.status(400).json({
-        success: false,
-        message: 'Employee ID, effective date, and basic salary are required',
-      });
+        if (wage_amount <= 0) {
+            return res.status(400).json({
+                success: false,
+                message: 'Wage amount must be greater than zero'
+            });
+        }
+
+        const structureData = {
+            effective_from: effective_from || new Date().toISOString().split('T')[0],
+            designation,
+            pay_grade,
+            wage_amount,
+            basic_salary: wage_amount,
+            wage_type: wage_type || 'FIXED',
+            pay_frequency: pay_frequency || 'MONTHLY',
+            working_days_per_week: working_days_per_week || 5,
+            break_time_hours: break_time_hours || 1,
+            approved_by: approved_by || req.user?.id,
+            created_by: req.user?.id
+        };
+
+        const result = await SalaryEngine.createSalaryStructure(
+            employee_id,
+            user_id,
+            structureData,
+            component_type_ids
+        );
+
+        res.status(201).json({
+            success: true,
+            message: 'Salary structure created successfully',
+            data: result
+        });
+
+    } catch (error) {
+        console.error('Create salary structure error:', error);
+        res.status(500).json({
+            success: false,
+            message: error.message || 'Failed to create salary structure'
+        });
     }
-
-    // Close existing active structures
-    await connection.query(
-      `UPDATE salary_structures 
-       SET effective_to = DATE_SUB(?, INTERVAL 1 DAY), status = 'SUPERSEDED'
-       WHERE employee_id = ? AND effective_to IS NULL AND status = 'ACTIVE'`,
-      [effective_from, employee_id]
-    );
-
-    // Create new structure
-    const [result] = await connection.query(
-      `INSERT INTO salary_structures 
-        (employee_id, effective_from, basic_salary, designation, pay_frequency, status, created_by)
-      VALUES (?, ?, ?, ?, ?, 'ACTIVE', ?)`,
-      [employee_id, effective_from, basic_salary, designation, pay_frequency || 'MONTHLY', req.user.id]
-    );
-
-    const structureId = result.insertId;
-
-    // Add components
-    for (const comp of components) {
-      let computedAmount = comp.amount || 0;
-
-      if (comp.calculation_type === 'PERCENTAGE' && comp.percentage) {
-        computedAmount = (basic_salary * comp.percentage) / 100;
-      }
-
-      await connection.query(
-        `INSERT INTO salary_components 
-          (salary_structure_id, component_type, component_name, calculation_type, amount, percentage, computed_amount, is_taxable, is_statutory)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [
-          structureId,
-          comp.component_type,
-          comp.component_name,
-          comp.calculation_type,
-          comp.amount || 0,
-          comp.percentage || null,
-          computedAmount,
-          comp.is_taxable !== false,
-          comp.is_statutory || false,
-        ]
-      );
-    }
-
-    await connection.commit();
-
-    const [newStructure] = await connection.query(
-      'SELECT * FROM salary_structures WHERE id = ?',
-      [structureId]
-    );
-
-    res.status(201).json({
-      success: true,
-      message: 'Salary structure created successfully',
-      data: newStructure[0],
-    });
-  } catch (error) {
-    await connection.rollback();
-    console.error('Create salary structure error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to create salary structure',
-      error: error.message,
-    });
-  } finally {
-    connection.release();
-  }
 };
 
-export const getSalaryStructureByEmployee = async (req, res) => {
-  try {
-    const { employeeId } = req.params;
+/**
+ * Calculate salary components (preview without saving)
+ * POST /api/salary/calculate
+ */
+export const calculateSalaryComponents = async (req, res) => {
+    try {
+        const { wage_amount, component_type_ids } = req.body;
 
-    const [structures] = await pool.query(
-      `SELECT ss.*,
-        (SELECT JSON_ARRAYAGG(JSON_OBJECT(
-          'id', id,
-          'component_name', component_name,
-          'component_type', component_type,
-          'calculation_type', calculation_type,
-          'amount', amount,
-          'percentage', percentage,
-          'computed_amount', computed_amount,
-          'is_taxable', is_taxable
-        )) FROM salary_components WHERE salary_structure_id = ss.id) as components
-       FROM salary_structures ss
-       WHERE ss.employee_id = ? AND ss.effective_to IS NULL
-       ORDER BY ss.effective_from DESC`,
-      [employeeId]
-    );
+        if (!wage_amount || !component_type_ids) {
+            return res.status(400).json({
+                success: false,
+                message: 'Missing required fields: wage_amount, component_type_ids'
+            });
+        }
 
-    res.json({ success: true, data: structures });
-  } catch (error) {
-    res.status(500).json({ success: false, message: 'Failed to fetch salary structure', error: error.message });
-  }
-};
+        // Fetch component types
+        const [componentTypes] = await db.query(
+            `SELECT * FROM salary_component_types
+            WHERE id IN (?)
+            AND is_active = TRUE
+            ORDER BY display_order ASC`,
+            [component_type_ids]
+        );
 
-export const updateSalaryStructure = async (req, res) => {
-  try {
-    const { id } = req.params;
-    const updateData = req.body;
+        const calculation = await SalaryEngine.calculateComponents(
+            wage_amount,
+            componentTypes
+        );
 
-    const fields = Object.keys(updateData).filter(key => updateData[key] !== undefined).map(key => `${key} = ?`);
-    if (fields.length === 0) {
-      return res.status(400).json({ success: false, message: 'No fields to update' });
+        res.status(200).json({
+            success: true,
+            data: calculation
+        });
+
+    } catch (error) {
+        console.error('Calculate components error:', error);
+        res.status(500).json({
+            success: false,
+            message: error.message || 'Failed to calculate components'
+        });
     }
-
-    const values = Object.values(updateData).filter(val => val !== undefined);
-    values.push(id);
-
-    await pool.query(`UPDATE salary_structures SET ${fields.join(', ')} WHERE id = ?`, values);
-
-    const [updated] = await pool.query('SELECT * FROM salary_structures WHERE id = ?', [id]);
-
-    res.json({ success: true, message: 'Salary structure updated successfully', data: updated[0] });
-  } catch (error) {
-    res.status(500).json({ success: false, message: 'Failed to update salary structure', error: error.message });
-  }
 };
 
+/**
+ * Get salary structure by ID with components
+ * GET /api/salary/structure/:id
+ */
+export const getSalaryStructure = async (req, res) => {
+    try {
+        const { id } = req.params;
+
+        const [structure] = await db.query(
+            `SELECT ss.*, 
+                e.employee_code, e.first_name, e.last_name, e.designation as emp_designation
+            FROM salary_structures ss
+            JOIN employees e ON e.id = ss.employee_id
+            WHERE ss.id = ?`,
+            [id]
+        );
+
+        if (structure.length === 0) {
+            return res.status(404).json({
+                success: false,
+                message: 'Salary structure not found'
+            });
+        }
+
+        // Fetch components
+        const [components] = await db.query(
+            `SELECT * FROM salary_components
+            WHERE salary_structure_id = ?
+            ORDER BY display_order ASC`,
+            [id]
+        );
+
+        // Fetch contributions
+        const [contributions] = await db.query(
+            `SELECT * FROM salary_contributions
+            WHERE salary_structure_id = ?`,
+            [id]
+        );
+
+        // Fetch deductions
+        const [deductions] = await db.query(
+            `SELECT * FROM salary_deductions
+            WHERE salary_structure_id = ?`,
+            [id]
+        );
+
+        const earnings = components.filter(c => c.component_type === 'EARNING');
+        const componentDeductions = components.filter(c => c.component_type === 'DEDUCTION');
+
+        res.status(200).json({
+            success: true,
+            data: {
+                structure: structure[0],
+                components: {
+                    earnings: earnings,
+                    deductions: componentDeductions,
+                    all: components
+                },
+                contributions: contributions,
+                deductions: deductions,
+                summary: {
+                    totalEarnings: earnings.reduce((sum, c) => sum + parseFloat(c.computed_amount), 0),
+                    totalDeductions: [
+                        ...componentDeductions,
+                        ...contributions.filter(c => c.contribution_type === 'EMPLOYEE'),
+                        ...deductions
+                    ].reduce((sum, d) => sum + parseFloat(d.amount), 0)
+                }
+            }
+        });
+
+    } catch (error) {
+        console.error('Get salary structure error:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to fetch salary structure'
+        });
+    }
+};
+
+/**
+ * Get active salary structure for employee
+ * GET /api/salary/structure/employee/:employeeId
+ */
+export const getEmployeeSalaryStructure = async (req, res) => {
+    try {
+        const { employeeId } = req.params;
+
+        const [structure] = await db.query(
+            `SELECT ss.*, 
+                e.employee_code, e.first_name, e.last_name
+            FROM salary_structures ss
+            JOIN employees e ON e.id = ss.employee_id
+            WHERE ss.employee_id = ?
+            AND ss.effective_to IS NULL
+            AND ss.status = 'ACTIVE'
+            ORDER BY ss.effective_from DESC
+            LIMIT 1`,
+            [employeeId]
+        );
+
+        if (structure.length === 0) {
+            return res.status(404).json({
+                success: false,
+                message: 'No active salary structure found for employee'
+            });
+        }
+
+        // Fetch components
+        const [components] = await db.query(
+            `SELECT * FROM salary_components
+            WHERE salary_structure_id = ?
+            ORDER BY display_order ASC`,
+            [structure[0].id]
+        );
+
+        res.status(200).json({
+            success: true,
+            data: {
+                structure: structure[0],
+                components: components
+            }
+        });
+
+    } catch (error) {
+        console.error('Get employee salary structure error:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to fetch employee salary structure'
+        });
+    }
+};
+
+/**
+ * Update wage (creates new versioned structure)
+ * PUT /api/salary/structure/:id/wage
+ */
+export const updateWage = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { new_wage } = req.body;
+
+        if (!new_wage || new_wage <= 0) {
+            return res.status(400).json({
+                success: false,
+                message: 'Invalid wage amount'
+            });
+        }
+
+        const result = await SalaryEngine.recalculateSalaryStructure(
+            id,
+            new_wage,
+            req.user?.id
+        );
+
+        res.status(200).json({
+            success: true,
+            message: 'Wage updated successfully. New structure version created.',
+            data: result
+        });
+
+    } catch (error) {
+        console.error('Update wage error:', error);
+        res.status(500).json({
+            success: false,
+            message: error.message || 'Failed to update wage'
+        });
+    }
+};
+
+/**
+ * Generate monthly salary slip
+ * POST /api/salary/slip/generate
+ */
 export const generateSalarySlip = async (req, res) => {
-  const connection = await pool.getConnection();
-  
-  try {
-    await connection.beginTransaction();
+    try {
+        const {
+            employee_id,
+            salary_month, // Format: YYYY-MM-DD (first day of month)
+            attendance_data // { total_working_days, present_days, leave_days }
+        } = req.body;
 
-    const {
-      employee_id,
-      salary_month,
-      working_days,
-      present_days,
-      leave_days = 0,
-      absent_days = 0,
-    } = req.body;
+        if (!employee_id || !salary_month || !attendance_data) {
+            return res.status(400).json({
+                success: false,
+                message: 'Missing required fields'
+            });
+        }
 
-    if (!employee_id || !salary_month || !working_days || present_days === undefined) {
-      return res.status(400).json({
-        success: false,
-        message: 'All required fields must be provided',
-      });
+        const result = await SalaryEngine.generateSalarySlip(
+            employee_id,
+            salary_month,
+            attendance_data
+        );
+
+        res.status(200).json({
+            success: true,
+            message: 'Salary slip generated successfully',
+            data: result
+        });
+
+    } catch (error) {
+        console.error('Generate salary slip error:', error);
+        res.status(500).json({
+            success: false,
+            message: error.message || 'Failed to generate salary slip'
+        });
     }
-
-    // Get active salary structure
-    const [structures] = await connection.query(
-      'SELECT * FROM salary_structures WHERE employee_id = ? AND effective_to IS NULL AND status = \'ACTIVE\'',
-      [employee_id]
-    );
-
-    if (structures.length === 0) {
-      return res.status(404).json({ success: false, message: 'No active salary structure found' });
-    }
-
-    const structure = structures[0];
-
-    // Get components
-    const [components] = await connection.query(
-      'SELECT * FROM salary_components WHERE salary_structure_id = ?',
-      [structure.id]
-    );
-
-    // Calculate totals
-    let total_earnings = 0;
-    let total_deductions = 0;
-
-    const componentsSnapshot = components.map(comp => {
-      const amount = comp.computed_amount || comp.amount;
-      
-      if (comp.component_type === 'EARNING') {
-        total_earnings += parseFloat(amount);
-      } else if (comp.component_type === 'DEDUCTION') {
-        total_deductions += parseFloat(amount);
-      }
-
-      return {
-        component_name: comp.component_name,
-        component_type: comp.component_type,
-        amount: amount,
-        is_taxable: comp.is_taxable,
-      };
-    });
-
-    const gross_salary = total_earnings;
-    const net_salary = gross_salary - total_deductions;
-
-    // Insert salary slip
-    const [result] = await connection.query(
-      `INSERT INTO salary_slips 
-        (employee_id, salary_structure_id, salary_month, payment_date, 
-         working_days, present_days, leave_days, absent_days,
-         gross_salary, total_earnings, total_deductions, net_salary,
-         components, status, generated_by)
-      VALUES (?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'GENERATED', ?)`,
-      [
-        employee_id,
-        structure.id,
-        salary_month,
-        working_days,
-        present_days,
-        leave_days,
-        absent_days,
-        gross_salary,
-        total_earnings,
-        total_deductions,
-        net_salary,
-        JSON.stringify(componentsSnapshot),
-        req.user.id,
-      ]
-    );
-
-    await connection.commit();
-
-    const [newSlip] = await connection.query('SELECT * FROM salary_slips WHERE id = ?', [result.insertId]);
-
-    res.status(201).json({
-      success: true,
-      message: 'Salary slip generated successfully',
-      data: newSlip[0],
-    });
-  } catch (error) {
-    await connection.rollback();
-    console.error('Generate salary slip error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to generate salary slip',
-      error: error.message,
-    });
-  } finally {
-    connection.release();
-  }
 };
 
+/**
+ * Get salary slip by ID
+ * GET /api/salary/slip/:id
+ */
 export const getSalarySlip = async (req, res) => {
-  try {
-    const [slips] = await pool.query(
-      `SELECT ss.*, e.full_name as employee_name
-       FROM salary_slips ss
-       JOIN employees e ON ss.employee_id = e.id
-       WHERE ss.id = ?`,
-      [req.params.id]
-    );
+    try {
+        const { id } = req.params;
 
-    if (slips.length === 0) {
-      return res.status(404).json({ success: false, message: 'Salary slip not found' });
+        const [slip] = await db.query(
+            `SELECT ss.*, 
+                e.employee_code, e.first_name, e.last_name, e.designation,
+                str.basic_salary, str.pay_frequency
+            FROM salary_slips ss
+            JOIN employees e ON e.id = ss.employee_id
+            JOIN salary_structures str ON str.id = ss.salary_structure_id
+            WHERE ss.id = ?`,
+            [id]
+        );
+
+        if (slip.length === 0) {
+            return res.status(404).json({
+                success: false,
+                message: 'Salary slip not found'
+            });
+        }
+
+        // Parse components JSON
+        const slipData = slip[0];
+        if (slipData.components) {
+            try {
+                slipData.components = JSON.parse(slipData.components);
+            } catch (e) {
+                console.error('Failed to parse components JSON');
+            }
+        }
+
+        res.status(200).json({
+            success: true,
+            data: slipData
+        });
+
+    } catch (error) {
+        console.error('Get salary slip error:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to fetch salary slip'
+        });
     }
-
-    res.json({ success: true, data: slips[0] });
-  } catch (error) {
-    res.status(500).json({ success: false, message: 'Failed to fetch salary slip', error: error.message });
-  }
 };
 
-export const getSalarySlipsByEmployee = async (req, res) => {
-  try {
-    const { employeeId } = req.params;
-    const { year } = req.query;
+/**
+ * Get all salary slips for employee
+ * GET /api/salary/slip/employee/:employeeId
+ */
+export const getEmployeeSalarySlips = async (req, res) => {
+    try {
+        const { employeeId } = req.params;
+        const { year, status } = req.query;
 
-    let query = 'SELECT * FROM salary_slips WHERE employee_id = ?';
-    const params = [employeeId];
+        let query = `
+            SELECT ss.*, 
+                e.employee_code, e.first_name, e.last_name
+            FROM salary_slips ss
+            JOIN employees e ON e.id = ss.employee_id
+            WHERE ss.employee_id = ?
+        `;
+        const params = [employeeId];
 
-    if (year) {
-      query += ' AND YEAR(salary_month) = ?';
-      params.push(year);
+        if (year) {
+            query += ` AND YEAR(ss.salary_month) = ?`;
+            params.push(year);
+        }
+
+        if (status) {
+            query += ` AND ss.status = ?`;
+            params.push(status);
+        }
+
+        query += ` ORDER BY ss.salary_month DESC`;
+
+        const [slips] = await db.query(query, params);
+
+        res.status(200).json({
+            success: true,
+            data: slips
+        });
+
+    } catch (error) {
+        console.error('Get employee salary slips error:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to fetch salary slips'
+        });
     }
-
-    query += ' ORDER BY salary_month DESC';
-
-    const [slips] = await pool.query(query, params);
-
-    res.json({ success: true, data: slips });
-  } catch (error) {
-    res.status(500).json({ success: false, message: 'Failed to fetch salary slips', error: error.message });
-  }
 };
 
+/**
+ * Approve salary slip
+ * PUT /api/salary/slip/:id/approve
+ */
 export const approveSalarySlip = async (req, res) => {
-  try {
-    const { id } = req.params;
+    try {
+        const { id } = req.params;
 
-    await pool.query(
-      'UPDATE salary_slips SET status = \'APPROVED\', approved_by = ?, approved_at = NOW() WHERE id = ?',
-      [req.user.id, id]
-    );
+        await db.query(
+            `UPDATE salary_slips
+            SET status = 'APPROVED',
+                approved_by = ?,
+                approved_at = NOW()
+            WHERE id = ?
+            AND status = 'GENERATED'`,
+            [req.user?.id, id]
+        );
 
-    res.json({ success: true, message: 'Salary slip approved successfully' });
-  } catch (error) {
-    res.status(500).json({ success: false, message: 'Failed to approve salary slip', error: error.message });
-  }
+        res.status(200).json({
+            success: true,
+            message: 'Salary slip approved successfully'
+        });
+
+    } catch (error) {
+        console.error('Approve salary slip error:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to approve salary slip'
+        });
+    }
 };
 
-export const markSalaryPaid = async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { payment_date, payment_mode, payment_reference } = req.body;
+/**
+ * Mark salary slip as paid
+ * PUT /api/salary/slip/:id/pay
+ */
+export const markSlipAsPaid = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { payment_date, payment_mode, payment_reference } = req.body;
 
-    await pool.query(
-      `UPDATE salary_slips 
-       SET status = 'PAID', payment_date = ?, payment_mode = ?, payment_reference = ?, paid_by = ?, paid_at = NOW()
-       WHERE id = ?`,
-      [payment_date, payment_mode, payment_reference, req.user.id, id]
-    );
+        await db.query(
+            `UPDATE salary_slips
+            SET status = 'PAID',
+                payment_date = ?,
+                payment_mode = ?,
+                payment_reference = ?,
+                paid_by = ?,
+                paid_at = NOW()
+            WHERE id = ?
+            AND status = 'APPROVED'`,
+            [payment_date, payment_mode, payment_reference, req.user?.id, id]
+        );
 
-    res.json({ success: true, message: 'Salary marked as paid successfully' });
-  } catch (error) {
-    res.status(500).json({ success: false, message: 'Failed to mark salary as paid', error: error.message });
-  }
+        res.status(200).json({
+            success: true,
+            message: 'Salary slip marked as paid'
+        });
+
+    } catch (error) {
+        console.error('Mark slip as paid error:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to mark slip as paid'
+        });
+    }
 };
+
+/**
+ * Validate salary structure
+ * GET /api/salary/structure/:id/validate
+ */
+export const validateSalaryStructure = async (req, res) => {
+    try {
+        const { id } = req.params;
+
+        const validation = await SalaryEngine.validateSalaryStructure(id);
+
+        res.status(200).json({
+            success: true,
+            data: validation
+        });
+
+    } catch (error) {
+        console.error('Validate salary structure error:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to validate salary structure'
+        });
+    }
+};
+
+/**
+ * Get all component types (for configuration)
+ * GET /api/salary/component-types
+ */
+export const getComponentTypes = async (req, res) => {
+    try {
+        const [componentTypes] = await db.query(
+            `SELECT * FROM salary_component_types
+            WHERE is_active = TRUE
+            ORDER BY component_category, display_order ASC`
+        );
+
+        const grouped = {
+            EARNING: componentTypes.filter(c => c.component_category === 'EARNING'),
+            DEDUCTION: componentTypes.filter(c => c.component_category === 'DEDUCTION'),
+            CONTRIBUTION: componentTypes.filter(c => c.component_category === 'CONTRIBUTION')
+        };
+
+        res.status(200).json({
+            success: true,
+            data: {
+                all: componentTypes,
+                grouped: grouped
+            }
+        });
+
+    } catch (error) {
+        console.error('Get component types error:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to fetch component types'
+        });
+    }
+};
+
+
