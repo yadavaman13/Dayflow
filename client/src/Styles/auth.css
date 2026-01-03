@@ -251,9 +251,28 @@
 ============================================ */
 .auth-header {
   text-align: center;
-  margin-bottom: 24px;
+  margin-bottom: 28px;
   position: relative;
   z-index: 1;
+}
+
+.auth-logo-card {
+  width: 56px;
+  height: 56px;
+  background: linear-gradient(135deg, #714B67 0%, #5a3c52 100%);
+  border-radius: 14px;
+  margin: 0 auto 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 16px rgba(113, 75, 103, 0.3);
+}
+
+.auth-logo-card span {
+  font-size: 20px;
+  font-weight: 800;
+  color: white;
+  letter-spacing: -0.5px;
 }
 
 .auth-icon-wrapper {
@@ -535,6 +554,59 @@
   box-shadow:
     0 0 0 3px rgba(16, 185, 129, 0.08),
     0 2px 8px rgba(16, 185, 129, 0.06);
+}
+
+/* ============================================
+   PASSWORD REQUIREMENTS CHECKLIST
+============================================ */
+.password-requirements {
+  margin-top: 12px;
+  padding: 14px 16px;
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+}
+
+.requirement-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 0;
+  font-size: 13px;
+  transition: color 0.2s ease;
+}
+
+.requirement-item.unmet {
+  color: #6b7280;
+}
+
+.requirement-item.unmet .requirement-icon {
+  color: #9ca3af;
+}
+
+.requirement-item.met {
+  color: #059669;
+}
+
+.requirement-item.met .requirement-icon {
+  color: #10b981;
+}
+
+.requirement-icon {
+  flex-shrink: 0;
+}
+
+/* Responsive */
+@media (max-width: 480px) {
+  .password-requirements {
+    padding: 12px 14px;
+  }
+
+  .requirement-item {
+    font-size: 12px;
+    gap: 8px;
+    padding: 5px 0;
+  }
 }
 
 /* Select Input Styling */
@@ -882,24 +954,12 @@ select.form-input {
   margin-top: 24px;
   padding-top: 20px;
   border-top: 1px solid #e5e7eb;
-  position: relative;
-}
-
-.auth-footer::before {
-  content: "";
-  position: absolute;
-  top: -1px;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 50px;
-  height: 2px;
-  background: linear-gradient(90deg, transparent, #714B67, transparent);
-  border-radius: 1px;
 }
 
 .auth-footer p {
   font-size: 13px;
   color: #6b7280;
+  margin-bottom: 8px;
 }
 
 .auth-link {
