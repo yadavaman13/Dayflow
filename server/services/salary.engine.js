@@ -394,41 +394,92 @@ class SalaryEngine {
 
     /**
      * Generate monthly salary slip with attendance impact
+     * Can be called with old signature (employeeId, salaryMonth, attendanceData) 
+     * or new signature (structureId, month, year, workedDays, totalDays, userId)
      */
-    static async generateSalarySlip(employeeId, salaryMonth, attendanceData) {
+    static async generateSalarySlip(...args) {
         const connection = await db.getConnection();
 
         try {
             await connection.beginTransaction();
 
+            let employeeId, salaryMonth, month, year, periodStart, periodEnd;
+            let attendanceData;
+            let structureId = null;
+
+            // Handle different call signatures
+            if (args.length === 3) {
+                // Old signature: generateSalarySlip(employeeId, salaryMonth, attendanceData)
+                [employeeId, salaryMonth, attendanceData] = args;
+                const date = new Date(salaryMonth);
+                month = date.getMonth() + 1;
+                year = date.getFullYear();
+                periodStart = salaryMonth;
+                const lastDay = new Date(year, month, 0).getDate();
+                periodEnd = `${year}-${String(month).padStart(2, '0')}-${lastDay}`;
+            } else if (args.length === 6) {
+                // New signature: generateSalarySlip(structureId, month, year, workedDays, totalDays, userId)
+                [structureId, month, year, , ,] = args;
+                const lastDay = new Date(year, month, 0).getDate();
+                salaryMonth = `${year}-${String(month).padStart(2, '0')}-01`;
+                periodStart = salaryMonth;
+                periodEnd = `${year}-${String(month).padStart(2, '0')}-${lastDay}`;
+                attendanceData = {
+                    total_working_days: args[4],
+                    present_days: args[3],
+                    leave_days: 0
+                };
+            } else {
+                throw new Error('Invalid number of arguments for generateSalarySlip');
+            }
+
             // Step 1: Check if slip already exists
-            const [existing] = await connection.query(
-                `SELECT id, status FROM salary_slips
-                WHERE employee_id = ? AND salary_month = ?`,
-                [employeeId, salaryMonth]
-            );
+            const checkQuery = structureId 
+                ? `SELECT id, status, employee_id FROM salary_slips ss 
+                   JOIN salary_structures str ON ss.salary_structure_id = str.id 
+                   WHERE str.id = ? AND ss.month = ? AND ss.year = ?`
+                : `SELECT id, status FROM salary_slips
+                   WHERE employee_id = ? AND salary_month = ?`;
+            
+            const checkParams = structureId 
+                ? [structureId, month, year]
+                : [employeeId, salaryMonth];
+
+            const [existing] = await connection.query(checkQuery, checkParams);
 
             if (existing.length > 0 && existing[0].status !== 'DRAFT') {
                 throw new Error('Salary slip already generated and locked for this month');
             }
 
+            if (structureId && existing.length > 0) {
+                employeeId = existing[0].employee_id;
+            }
+
             // Step 2: Fetch active salary structure
-            const [structures] = await connection.query(
-                `SELECT * FROM salary_structures
-                WHERE employee_id = ?
-                AND effective_from <= ?
-                AND (effective_to IS NULL OR effective_to >= ?)
-                AND status = 'ACTIVE'
-                ORDER BY effective_from DESC
-                LIMIT 1`,
-                [employeeId, salaryMonth, salaryMonth]
-            );
+            const structureQuery = structureId
+                ? `SELECT * FROM salary_structures WHERE id = ? AND status = 'ACTIVE'`
+                : `SELECT * FROM salary_structures
+                   WHERE employee_id = ?
+                   AND effective_from <= ?
+                   AND (effective_to IS NULL OR effective_to >= ?)
+                   AND status = 'ACTIVE'
+                   ORDER BY effective_from DESC
+                   LIMIT 1`;
+            
+            const structureParams = structureId
+                ? [structureId]
+                : [employeeId, salaryMonth, salaryMonth];
+
+            const [structures] = await connection.query(structureQuery, structureParams);
 
             if (structures.length === 0) {
                 throw new Error('No active salary structure found for employee');
             }
 
             const structure = structures[0];
+            if (!employeeId) {
+                employeeId = structure.employee_id;
+            }
 
             // Step 3: Fetch salary components
             const [components] = await connection.query(
@@ -509,14 +560,14 @@ class SalaryEngine {
                 // Create new
                 const [result] = await connection.query(
                     `INSERT INTO salary_slips (
-                        employee_id, salary_structure_id, salary_month,
+                        employee_id, salary_structure_id, salary_month, month, year, period_start, period_end,
                         working_days, present_days, leave_days, absent_days,
                         gross_salary, total_earnings, total_deductions, net_salary,
                         tax_deducted, provident_fund, professional_tax,
                         components, status, generated_at
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'GENERATED', NOW())`,
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'GENERATED', NOW())`,
                     [
-                        employeeId, structure.id, salaryMonth,
+                        employeeId, structure.id, salaryMonth, month, year, periodStart, periodEnd,
                         workingDays, presentDays, leaveDays, absentDays,
                         grossSalary, totalEarnings, totalDeductions, netSalary,
                         0, // tax_deducted (calculate separately)
@@ -526,16 +577,48 @@ class SalaryEngine {
                     ]
                 );
                 slipId = result.insertId;
+
+                // Insert component details for better querying
+                for (const comp of components) {
+                    await connection.query(
+                        `INSERT INTO salary_slip_components (slip_id, component_type_id, amount, is_deduction)
+                         VALUES (?, (SELECT id FROM salary_component_types WHERE component_code = ? LIMIT 1), ?, ?)`,
+                        [slipId, comp.component_code, comp.computed_amount, comp.component_type === 'DEDUCTION']
+                    );
+                }
+
+                // Insert deductions as components
+                for (const ded of [...contributions.filter(c => c.contribution_type === 'EMPLOYEE'), ...deductions]) {
+                    const dedCode = ded.name.includes('PF') ? 'PF_EMP' : 
+                                   ded.name.includes('Professional') ? 'PROF_TAX' : 'OTHER_DED';
+                    await connection.query(
+                        `INSERT INTO salary_slip_components (slip_id, component_type_id, amount, is_deduction)
+                         VALUES (?, 
+                                 (SELECT COALESCE(
+                                    (SELECT id FROM salary_component_types WHERE component_code = ? LIMIT 1),
+                                    (SELECT id FROM salary_component_types WHERE name = ? LIMIT 1),
+                                    1
+                                 )), ?, TRUE)`,
+                        [slipId, dedCode, ded.name, ded.amount]
+                    );
+                }
             }
 
             await connection.commit();
 
             return {
                 success: true,
+                data: {
+                    slip_id: slipId,
+                    net_salary: netSalary,
+                    gross_salary: grossSalary,
+                    deductions: totalDeductions,
+                    lop_amount: lopAmount
+                },
+                // Legacy format for backwards compatibility
                 slipId: slipId,
                 netSalary: netSalary,
                 grossSalary: grossSalary,
-                deductions: totalDeductions,
                 lopAmount: lopAmount
             };
 
@@ -646,6 +729,121 @@ class SalaryEngine {
             totalEarnings: totalEarnings,
             componentCount: components.length
         };
+    }
+
+    /**
+     * Approve/validate a salary slip
+     * @param {number} slipId - Salary slip ID
+     * @param {number} approvedBy - User ID approving the slip
+     */
+    static async approveSalarySlip(slipId, approvedBy) {
+        const connection = await db.getConnection();
+        
+        try {
+            await connection.beginTransaction();
+            
+            // Check if slip exists and is in correct status
+            const [[slip]] = await connection.query(
+                `SELECT id, status FROM salary_slips WHERE id = ?`,
+                [slipId]
+            );
+            
+            if (!slip) {
+                throw new Error('Salary slip not found');
+            }
+            
+            if (slip.status === 'APPROVED' || slip.status === 'PAID') {
+                throw new Error('Salary slip is already approved or paid');
+            }
+            
+            // Update slip status to APPROVED
+            await connection.query(
+                `UPDATE salary_slips 
+                 SET status = 'APPROVED', 
+                     approved_by = ?, 
+                     approved_at = NOW()
+                 WHERE id = ?`,
+                [approvedBy, slipId]
+            );
+            
+            await connection.commit();
+            
+            return {
+                success: true,
+                message: 'Salary slip approved successfully',
+                data: {
+                    slip_id: slipId,
+                    status: 'APPROVED'
+                }
+            };
+            
+        } catch (error) {
+            await connection.rollback();
+            return {
+                success: false,
+                message: error.message
+            };
+        } finally {
+            connection.release();
+        }
+    }
+
+    /**
+     * Mark salary slip as paid
+     * @param {number} slipId - Salary slip ID
+     * @param {number} paidBy - User ID marking as paid
+     */
+    static async markSlipAsPaid(slipId, paidBy) {
+        const connection = await db.getConnection();
+        
+        try {
+            await connection.beginTransaction();
+            
+            // Check if slip exists and is approved
+            const [[slip]] = await connection.query(
+                `SELECT id, status FROM salary_slips WHERE id = ?`,
+                [slipId]
+            );
+            
+            if (!slip) {
+                throw new Error('Salary slip not found');
+            }
+            
+            if (slip.status !== 'APPROVED') {
+                throw new Error('Salary slip must be approved before marking as paid');
+            }
+            
+            // Update slip status to PAID
+            await connection.query(
+                `UPDATE salary_slips 
+                 SET status = 'PAID', 
+                     paid_by = ?, 
+                     paid_at = NOW(),
+                     payment_date = CURDATE()
+                 WHERE id = ?`,
+                [paidBy, slipId]
+            );
+            
+            await connection.commit();
+            
+            return {
+                success: true,
+                message: 'Salary slip marked as paid successfully',
+                data: {
+                    slip_id: slipId,
+                    status: 'PAID'
+                }
+            };
+            
+        } catch (error) {
+            await connection.rollback();
+            return {
+                success: false,
+                message: error.message
+            };
+        } finally {
+            connection.release();
+        }
     }
 }
 
