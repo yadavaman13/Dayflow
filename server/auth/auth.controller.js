@@ -43,7 +43,7 @@ export const login = async (req, res) => {
     }
 
     // Check if account is active
-    if (user.status !== 'active') {
+    if (user.status !== 'ACTIVE' && user.status !== 'active' && user.status !== 'FIRST_LOGIN_PENDING') {
       return res.status(403).json({
         success: false,
         message: "Your account has been deactivated. Please contact HR.",
@@ -82,10 +82,14 @@ export const login = async (req, res) => {
         user: {
           id: user.id,
           employeeId: user.employee_id,
+          employee_id: user.employee_id,
           email: user.email,
           name: user.name,
+          full_name: user.full_name || user.name,
           phone: user.phone,
           role: user.role,
+          status: user.status,
+          profile_url: user.profile_url || null,
           isFirstLogin: user.is_first_login === 1,
         },
         expiresIn: rememberMe ? "30 days" : "7 days",

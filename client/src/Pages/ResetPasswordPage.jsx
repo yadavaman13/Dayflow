@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { authAPI } from "../Services/api";
+import { authAPI } from "../services/api";
 import {
   Lock,
   Eye,
