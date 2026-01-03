@@ -1,6 +1,10 @@
 import { useState, useEffect } from "react";
 // import SmartSchedulingAssistant from "../components/SmartSchedulingAssistant.jsx";
+<<<<<<< HEAD
 import axios from "../services/api";
+=======
+// import axios from "axios";
+>>>>>>> 0c412b32b7692a79facb3e3604071437b6f0984e
 
 export default function TimeOff() {
   const [activeTab, setActiveTab] = useState("timeOff");
