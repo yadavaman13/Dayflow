@@ -32,17 +32,16 @@ export const sendPasswordResetEmail = async (
   resetToken,
   userName = "User"
 ) => {
-  const resetLink = `${
-    process.env.CLIENT_URL || "http://localhost:5173"
-  }/reset-password/${resetToken}`;
+  const resetLink = `${process.env.CLIENT_URL || "http://localhost:5173"
+    }/reset-password/${resetToken}`;
 
   const mailOptions = {
     from: {
-      name: "Dayflow HR",
+      name: "Day Flow HR",
       address: process.env.EMAIL_USER,
     },
     to: to,
-    subject: "Password Reset Request",
+    subject: "Password Reset Request - Day Flow",
     html: `
       <!DOCTYPE html>
       <html>
@@ -53,114 +52,188 @@ export const sendPasswordResetEmail = async (
           body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             line-height: 1.6;
-            color: #333;
+            color: #374151;
             max-width: 600px;
             margin: 0 auto;
-            padding: 20px;
-            background-color: #f5f5f5;
+            padding: 0;
+            background-color: #f3f0f2;
+          }
+          .email-wrapper {
+            padding: 40px 20px;
           }
           .container {
             background-color: #ffffff;
-            border-radius: 8px;
-            padding: 40px;
-            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            border-radius: 16px;
+            padding: 0;
+            box-shadow: 0 4px 20px rgba(113, 75, 103, 0.12);
+            overflow: hidden;
           }
-          .header {
+          .header-bar {
+            background: linear-gradient(135deg, #714B67 0%, #5a3c52 100%);
+            padding: 32px 40px;
             text-align: center;
-            margin-bottom: 30px;
           }
           .logo {
-            width: 60px;
-            height: 60px;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            border-radius: 12px;
-            margin: 0 auto 20px;
+            width: 56px;
+            height: 56px;
+            background: rgba(255, 255, 255, 0.15);
+            border-radius: 14px;
+            margin: 0 auto 16px;
             display: flex;
             align-items: center;
             justify-content: center;
             color: white;
-            font-size: 24px;
-            font-weight: bold;
+            font-size: 20px;
+            font-weight: 800;
+            letter-spacing: -0.5px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
           }
-          h1 {
-            color: #1a202c;
+          .header-title {
+            color: #ffffff;
             margin: 0;
-            font-size: 24px;
+            font-size: 22px;
+            font-weight: 600;
+            letter-spacing: -0.3px;
+          }
+          .header-subtitle {
+            color: rgba(255, 255, 255, 0.8);
+            font-size: 14px;
+            margin-top: 6px;
           }
           .content {
-            margin: 30px 0;
+            padding: 36px 40px;
+          }
+          .greeting {
+            font-size: 16px;
+            color: #1f2937;
+            margin-bottom: 20px;
+          }
+          .message-text {
+            font-size: 15px;
+            color: #4b5563;
+            margin-bottom: 28px;
+            line-height: 1.7;
+          }
+          .button-container {
+            text-align: center;
+            margin: 32px 0;
           }
           .button {
             display: inline-block;
-            padding: 14px 32px;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
+            padding: 14px 36px;
+            background: linear-gradient(135deg, #714B67 0%, #5a3c52 100%);
+            color: #ffffff !important;
             text-decoration: none;
-            border-radius: 6px;
+            border-radius: 10px;
             font-weight: 600;
-            margin: 20px 0;
-            text-align: center;
+            font-size: 15px;
+            box-shadow: 0 4px 14px rgba(113, 75, 103, 0.35);
+            transition: all 0.3s ease;
           }
-          .button:hover {
-            background: linear-gradient(135deg, #5568d3 0%, #6a3f8f 100%);
+          .link-section {
+            margin-top: 24px;
           }
-          .footer {
-            margin-top: 30px;
-            padding-top: 20px;
-            border-top: 1px solid #e2e8f0;
-            font-size: 14px;
-            color: #718096;
-            text-align: center;
-          }
-          .warning {
-            background-color: #fff3cd;
-            border-left: 4px solid #ffc107;
-            padding: 12px;
-            margin: 20px 0;
-            border-radius: 4px;
-            font-size: 14px;
+          .link-label {
+            font-size: 13px;
+            color: #6b7280;
+            margin-bottom: 8px;
           }
           .link-text {
             word-break: break-all;
-            background-color: #f7fafc;
-            padding: 10px;
-            border-radius: 4px;
+            background-color: #faf8f9;
+            padding: 14px 16px;
+            border-radius: 10px;
+            font-size: 12px;
+            color: #714B67;
+            border: 1px solid #ebe5e9;
+            font-family: monospace;
+          }
+          .warning {
+            background: linear-gradient(135deg, #fef9e7 0%, #fef3c7 100%);
+            border-left: 4px solid #f59e0b;
+            padding: 16px 18px;
+            margin: 28px 0;
+            border-radius: 0 10px 10px 0;
+            font-size: 14px;
+            color: #92400e;
+          }
+          .warning-title {
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 6px;
+            color: #b45309;
+          }
+          .help-text {
+            font-size: 14px;
+            color: #6b7280;
+            margin-top: 24px;
+          }
+          .footer {
+            background-color: #faf8f9;
+            padding: 24px 40px;
+            border-top: 1px solid #ebe5e9;
+            text-align: center;
+          }
+          .footer-text {
             font-size: 13px;
-            color: #4a5568;
-            margin-top: 10px;
+            color: #9ca3af;
+            margin: 0;
+            line-height: 1.6;
+          }
+          .footer-brand {
+            color: #714B67;
+            font-weight: 600;
           }
         </style>
       </head>
       <body>
-        <div class="container">
-          <div class="header">
-            <div class="logo">📦</div>
-            <h1>Password Reset Request</h1>
-          </div>
-          
-          <div class="content">
-            <p>Hello ${userName},</p>
-            
-            <p>We received a request to reset your password. Click the button below to create a new password:</p>
-            
-            <div style="text-align: center;">
-              <a href="${resetLink}" class="button">Reset Password</a>
+        <div class="email-wrapper">
+          <div class="container">
+            <div class="header-bar">
+              <div class="logo">DF</div>
+              <h1 class="header-title">Password Reset Request</h1>
+              <p class="header-subtitle">We're here to help you get back in</p>
             </div>
             
-            <p style="font-size: 14px; color: #718096;">Or copy and paste this link in your browser:</p>
-            <div class="link-text">${resetLink}</div>
-            
-            <div class="warning">
-              <strong>⚠️ Security Notice:</strong><br>
-              This link will expire in 1 hour. If you didn't request a password reset, please ignore this email.
+            <div class="content">
+              <p class="greeting">Hello <strong>${userName}</strong>,</p>
+              
+              <p class="message-text">
+                We received a request to reset your password for your Day Flow account. 
+                Click the button below to create a new secure password.
+              </p>
+              
+              <div class="button-container">
+                <a href="${resetLink}" class="button">Reset My Password</a>
+              </div>
+              
+              <div class="link-section">
+                <p class="link-label">Or copy and paste this link in your browser:</p>
+                <div class="link-text">${resetLink}</div>
+              </div>
+              
+              <div class="warning">
+                <div class="warning-title">⚠️ Security Notice</div>
+                This link will expire in <strong>1 hour</strong> for your security. 
+                If you didn't request this password reset, you can safely ignore this email.
+              </div>
+              
+              <p class="help-text">
+                Having trouble? Contact your HR administrator for assistance.
+              </p>
             </div>
             
-            <p>If you're having trouble clicking the button, copy and paste the URL above into your web browser.</p>
-          </div>
-          
-          <div class="footer">
-            <p>This is an automated email, please do not reply.</p>
-            <p>&copy; ${new Date().getFullYear()} Dayflow. All rights reserved.</p>
+            <div class="footer">
+              <p class="footer-text">
+                This is an automated message from <span class="footer-brand">Day Flow</span>.<br>
+                Please do not reply to this email.
+              </p>
+              <p class="footer-text" style="margin-top: 12px;">
+                &copy; ${new Date().getFullYear()} Day Flow. All rights reserved.
+              </p>
+            </div>
           </div>
         </div>
       </body>
@@ -169,7 +242,7 @@ export const sendPasswordResetEmail = async (
     text: `
 Hello ${userName},
 
-We received a request to reset your password.
+We received a request to reset your password for your Day Flow account.
 
 To reset your password, click the link below:
 ${resetLink}
@@ -180,7 +253,7 @@ If you didn't request a password reset, please ignore this email.
 
 ---
 This is an automated email, please do not reply.
-© ${new Date().getFullYear()} Dayflow. All rights reserved.
+© ${new Date().getFullYear()} Day Flow. All rights reserved.
     `,
   };
 
@@ -207,17 +280,16 @@ export const sendEmployeeInviteEmail = async (
   userName,
   employeeId
 ) => {
-  const setupLink = `${
-    process.env.CLIENT_URL || "http://localhost:5173"
-  }/reset-password/${resetToken}`;
+  const setupLink = `${process.env.CLIENT_URL || "http://localhost:5173"
+    }/reset-password/${resetToken}`;
 
   const mailOptions = {
     from: {
-      name: "Dayflow HR",
+      name: "Day Flow HR",
       address: process.env.EMAIL_USER,
     },
     to: to,
-    subject: "Welcome to Dayflow - Set Up Your Account",
+    subject: "Welcome to Day Flow - Set Up Your Account 🎉",
     html: `
       <!DOCTYPE html>
       <html>
@@ -228,166 +300,294 @@ export const sendEmployeeInviteEmail = async (
           body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             line-height: 1.6;
-            color: #333;
+            color: #374151;
             max-width: 600px;
             margin: 0 auto;
-            padding: 20px;
-            background-color: #f5f5f5;
+            padding: 0;
+            background-color: #f3f0f2;
+          }
+          .email-wrapper {
+            padding: 40px 20px;
           }
           .container {
             background-color: #ffffff;
-            border-radius: 8px;
-            padding: 40px;
-            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            border-radius: 16px;
+            padding: 0;
+            box-shadow: 0 4px 20px rgba(113, 75, 103, 0.12);
+            overflow: hidden;
           }
-          .header {
+          .header-bar {
+            background: linear-gradient(135deg, #714B67 0%, #5a3c52 100%);
+            padding: 36px 40px;
             text-align: center;
-            margin-bottom: 30px;
           }
           .logo {
             width: 60px;
             height: 60px;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            border-radius: 12px;
-            margin: 0 auto 20px;
+            background: rgba(255, 255, 255, 0.15);
+            border-radius: 16px;
+            margin: 0 auto 16px;
             display: flex;
             align-items: center;
             justify-content: center;
             color: white;
-            font-size: 24px;
-            font-weight: bold;
+            font-size: 22px;
+            font-weight: 800;
+            letter-spacing: -0.5px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
           }
-          h1 {
-            color: #1a202c;
+          .welcome-badge {
+            display: inline-block;
+            background: rgba(255, 255, 255, 0.2);
+            padding: 6px 16px;
+            border-radius: 20px;
+            font-size: 12px;
+            color: white;
+            font-weight: 600;
+            margin-bottom: 12px;
+            letter-spacing: 0.5px;
+          }
+          .header-title {
+            color: #ffffff;
             margin: 0;
             font-size: 24px;
+            font-weight: 700;
+            letter-spacing: -0.3px;
+          }
+          .header-subtitle {
+            color: rgba(255, 255, 255, 0.85);
+            font-size: 14px;
+            margin-top: 8px;
           }
           .content {
-            margin: 30px 0;
+            padding: 36px 40px;
           }
-          .info-box {
-            background-color: #f7fafc;
-            border-left: 4px solid #667eea;
-            padding: 15px;
+          .greeting {
+            font-size: 16px;
+            color: #1f2937;
+            margin-bottom: 20px;
+          }
+          .message-text {
+            font-size: 15px;
+            color: #4b5563;
+            margin-bottom: 28px;
+            line-height: 1.7;
+          }
+          .info-card {
+            background: linear-gradient(135deg, #faf8f9 0%, #f5f1f4 100%);
+            border: 1px solid #ebe5e9;
+            border-radius: 12px;
+            padding: 20px 24px;
             margin: 20px 0;
-            border-radius: 4px;
           }
-          .info-box strong {
-            color: #1a202c;
-            display: block;
-            margin-bottom: 5px;
+          .info-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px 0;
+          }
+          .info-row:not(:last-child) {
+            border-bottom: 1px solid #e5e0e4;
+          }
+          .info-label {
+            font-size: 13px;
+            color: #6b7280;
+            font-weight: 500;
+          }
+          .info-value {
+            font-size: 15px;
+            color: #714B67;
+            font-weight: 700;
+            letter-spacing: 0.02em;
+          }
+          .info-value-email {
+            font-size: 14px;
+            color: #374151;
+            font-weight: 500;
+          }
+          .button-container {
+            text-align: center;
+            margin: 32px 0;
           }
           .button {
             display: inline-block;
-            padding: 14px 32px;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
+            padding: 16px 40px;
+            background: linear-gradient(135deg, #714B67 0%, #5a3c52 100%);
+            color: #ffffff !important;
             text-decoration: none;
-            border-radius: 6px;
+            border-radius: 12px;
             font-weight: 600;
-            margin: 20px 0;
-            text-align: center;
+            font-size: 15px;
+            box-shadow: 0 6px 20px rgba(113, 75, 103, 0.35);
+            letter-spacing: 0.02em;
           }
-          .button:hover {
-            background: linear-gradient(135deg, #5568d3 0%, #6a3f8f 100%);
+          .link-section {
+            margin-top: 24px;
           }
-          .footer {
-            margin-top: 30px;
-            padding-top: 20px;
-            border-top: 1px solid #e2e8f0;
-            font-size: 14px;
-            color: #718096;
-            text-align: center;
-          }
-          .warning {
-            background-color: #fff3cd;
-            border-left: 4px solid #ffc107;
-            padding: 12px;
-            margin: 20px 0;
-            border-radius: 4px;
-            font-size: 14px;
+          .link-label {
+            font-size: 13px;
+            color: #6b7280;
+            margin-bottom: 8px;
           }
           .link-text {
             word-break: break-all;
-            background-color: #f7fafc;
-            padding: 10px;
-            border-radius: 4px;
+            background-color: #faf8f9;
+            padding: 14px 16px;
+            border-radius: 10px;
+            font-size: 12px;
+            color: #714B67;
+            border: 1px solid #ebe5e9;
+            font-family: monospace;
+          }
+          .warning {
+            background: linear-gradient(135deg, #fef9e7 0%, #fef3c7 100%);
+            border-left: 4px solid #f59e0b;
+            padding: 16px 18px;
+            margin: 28px 0;
+            border-radius: 0 10px 10px 0;
+            font-size: 14px;
+            color: #92400e;
+          }
+          .warning-title {
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 6px;
+            color: #b45309;
+          }
+          .tip-box {
+            background: linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%);
+            border-left: 4px solid #10b981;
+            padding: 16px 18px;
+            margin: 20px 0;
+            border-radius: 0 10px 10px 0;
+            font-size: 14px;
+            color: #065f46;
+          }
+          .tip-title {
+            font-weight: 600;
+            margin-bottom: 6px;
+            color: #047857;
+          }
+          .footer {
+            background-color: #faf8f9;
+            padding: 24px 40px;
+            border-top: 1px solid #ebe5e9;
+            text-align: center;
+          }
+          .footer-text {
             font-size: 13px;
-            color: #4a5568;
-            margin-top: 10px;
+            color: #9ca3af;
+            margin: 0;
+            line-height: 1.6;
+          }
+          .footer-brand {
+            color: #714B67;
+            font-weight: 600;
+          }
+          .contact-link {
+            color: #714B67;
+            text-decoration: none;
+            font-weight: 500;
           }
         </style>
       </head>
       <body>
-        <div class="container">
-          <div class="header">
-            <div class="logo">🎉</div>
-            <h1>Welcome to Dayflow!</h1>
-          </div>
-          
-          <div class="content">
-            <p>Hello ${userName},</p>
-            
-            <p>Welcome aboard! Your employee account has been created by HR. Below are your account details:</p>
-            
-            <div class="info-box">
-              <strong>Employee ID:</strong>
-              <span style="font-size: 16px; color: #667eea; font-weight: 600;">${employeeId}</span>
+        <div class="email-wrapper">
+          <div class="container">
+            <div class="header-bar">
+              <div class="logo">DF</div>
+              <div class="welcome-badge">🎉 WELCOME ABOARD</div>
+              <h1 class="header-title">Welcome to Day Flow!</h1>
+              <p class="header-subtitle">Your account is ready to be activated</p>
             </div>
             
-            <div class="info-box">
-              <strong>Email:</strong>
-              <span style="font-size: 14px;">${to}</span>
+            <div class="content">
+              <p class="greeting">Hello <strong>${userName}</strong>,</p>
+              
+              <p class="message-text">
+                Great news! Your employee account has been successfully created by HR. 
+                Below are your account details to get you started on your Day Flow journey.
+              </p>
+              
+              <div class="info-card">
+                <div class="info-row">
+                  <span class="info-label">Employee ID</span>
+                  <span class="info-value">${employeeId}</span>
+                </div>
+                <div class="info-row">
+                  <span class="info-label">Email Address</span>
+                  <span class="info-value-email">${to}</span>
+                </div>
+              </div>
+              
+              <p class="message-text" style="margin-top: 28px;">
+                To access your account, you'll need to set up a secure password. 
+                Click the button below to get started:
+              </p>
+              
+              <div class="button-container">
+                <a href="${setupLink}" class="button">Set Up My Password</a>
+              </div>
+              
+              <div class="link-section">
+                <p class="link-label">Or copy and paste this link in your browser:</p>
+                <div class="link-text">${setupLink}</div>
+              </div>
+              
+              <div class="warning">
+                <div class="warning-title">⏰ Important</div>
+                This setup link will expire in <strong>7 days</strong>. 
+                Please complete your password setup as soon as possible to access your account.
+              </div>
+              
+              <div class="tip-box">
+                <div class="tip-title">💡 Quick Tip</div>
+                You can use either your <strong>Employee ID</strong> or <strong>Email address</strong> to log in to Day Flow.
+              </div>
             </div>
             
-            <p>To get started, you need to set up your password. Please click the button below:</p>
-            
-            <div style="text-align: center;">
-              <a href="${setupLink}" class="button">Set Up Password</a>
+            <div class="footer">
+              <p class="footer-text">
+                Need help? Contact your <span class="contact-link">HR Administrator</span> for assistance.
+              </p>
+              <p class="footer-text" style="margin-top: 12px;">
+                This is an automated message from <span class="footer-brand">Day Flow</span>.<br>
+                Please do not reply to this email.
+              </p>
+              <p class="footer-text" style="margin-top: 12px;">
+                &copy; ${new Date().getFullYear()} Day Flow. All rights reserved.
+              </p>
             </div>
-            
-            <p style="font-size: 14px; color: #718096;">Or copy and paste this link in your browser:</p>
-            <div class="link-text">${setupLink}</div>
-            
-            <div class="warning">
-              <strong>⚠️ Important:</strong><br>
-              This link will expire in 7 days. Please set up your password as soon as possible to access your account.
-            </div>
-            
-            <p><strong>Note:</strong> You can use either your Employee ID or Email address to log in to the system.</p>
-          </div>
-          
-          <div class="footer">
-            <p>If you have any questions, please contact HR.</p>
-            <p>This is an automated email, please do not reply.</p>
-            <p>&copy; ${new Date().getFullYear()} Dayflow. All rights reserved.</p>
           </div>
         </div>
       </body>
       </html>
     `,
     text: `
-Welcome to Dayflow!
+Welcome to Day Flow!
 
 Hello ${userName},
 
-Welcome aboard! Your employee account has been created by HR.
+Great news! Your employee account has been successfully created by HR.
 
-Employee ID: ${employeeId}
-Email: ${to}
+Your Account Details:
+- Employee ID: ${employeeId}
+- Email: ${to}
 
 To get started, you need to set up your password. Please click the link below:
 ${setupLink}
 
 This link will expire in 7 days. Please set up your password as soon as possible.
 
-Note: You can use either your Employee ID or Email address to log in to the system.
+Quick Tip: You can use either your Employee ID or Email address to log in to Day Flow.
 
-If you have any questions, please contact HR.
+Need help? Contact your HR Administrator for assistance.
 
 ---
 This is an automated email, please do not reply.
-© ${new Date().getFullYear()} Dayflow. All rights reserved.
+© ${new Date().getFullYear()} Day Flow. All rights reserved.
     `,
   };
 
