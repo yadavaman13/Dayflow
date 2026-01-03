@@ -294,9 +294,7 @@ const LoginPage = () => {
                     </form>
 
                     {/* Footer */}   {/*remove */}
-                    <div className="auth-footer">
-                        <p>Don't have an account? <Link to="/register" className="auth-link">Register here</Link></p>
-                    </div>
+
                 </div>
             </div>
 
