@@ -239,6 +239,65 @@
   animation: shake 0.5s ease-in-out;
 }
 
+/* Form Success Banner */
+.form-success-banner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  background: rgba(16, 185, 129, 0.1);
+  border: 1px solid rgba(16, 185, 129, 0.2);
+  border-radius: 12px;
+  color: #059669;
+  font-size: 14px;
+  animation: fadeIn 0.5s ease-in-out;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Info Box */
+.info-box {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px 16px;
+  background: rgba(99, 102, 241, 0.1);
+  border: 1px solid rgba(99, 102, 241, 0.2);
+  border-left: 4px solid var(--primary);
+  border-radius: 8px;
+  font-size: 13px;
+  color: var(--gray-700);
+}
+
+.info-box svg {
+  flex-shrink: 0;
+  color: var(--primary);
+  margin-top: 2px;
+}
+
+.info-box p {
+  margin: 0;
+  line-height: 1.6;
+}
+
+.info-box p + p {
+  margin-top: 4px;
+}
+
+.info-box strong {
+  color: var(--gray-900);
+  font-weight: 600;
+}
+
 @keyframes shake {
   0%,
   100% {
