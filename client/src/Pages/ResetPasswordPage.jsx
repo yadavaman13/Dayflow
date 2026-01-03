@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { authAPI } from "../services/api";
+import { authAPI } from "../Services/api";
 import {
   Lock,
   Eye,
@@ -149,12 +149,30 @@ const ResetPasswordPage = () => {
         <div className="auth-shape auth-shape-3"></div>
       </div>
 
+      {/* Navbar */}
+      <nav className="auth-navbar">
+        <Link to="/" className="auth-logo">
+          <div className="logo-icon">
+            <span className="logo-initials">DF</span>
+          </div>
+          <span className="logo-text">Day Flow</span>
+        </Link>
+        <Link to="/login" className="home-btn">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M15 3H19C19.5304 3 20.0391 3.21071 20.4142 3.58579C20.7893 3.96086 21 4.46957 21 5V19C21 19.5304 20.7893 20.0391 20.4142 20.4142C20.0391 20.7893 19.5304 21 19 21H15" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+            <path d="M10 17L15 12L10 7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+            <path d="M15 12H3" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+          Login
+        </Link>
+      </nav>
+
       <div className="auth-container">
         <div className="auth-card animate-slide-up">
           {/* Header Section */}
           <div className="auth-header">
             <div className="auth-icon-wrapper">
-              <Shield size={32} strokeWidth={2} />
+              <Shield size={24} strokeWidth={2} />
             </div>
             <h1 className="auth-title">Create New Password</h1>
             <p className="auth-subtitle">
@@ -188,13 +206,12 @@ const ResetPasswordPage = () => {
           <form onSubmit={handleSubmit} className="auth-form">
             {/* Password Input */}
             <div
-              className={`form-group ${
-                errors.password && touched.password
+              className={`form-group ${errors.password && touched.password
                   ? "has-error"
                   : formData.password && !errors.password && touched.password
-                  ? "is-valid"
-                  : ""
-              }`}
+                    ? "is-valid"
+                    : ""
+                }`}
             >
               <label htmlFor="password" className="form-label">
                 <KeyRound size={16} />
@@ -234,15 +251,14 @@ const ResetPasswordPage = () => {
 
             {/* Confirm Password Input */}
             <div
-              className={`form-group ${
-                errors.confirmPassword && touched.confirmPassword
+              className={`form-group ${errors.confirmPassword && touched.confirmPassword
                   ? "has-error"
                   : formData.confirmPassword &&
                     !errors.confirmPassword &&
                     touched.confirmPassword
-                  ? "is-valid"
-                  : ""
-              }`}
+                    ? "is-valid"
+                    : ""
+                }`}
             >
               <label htmlFor="confirmPassword" className="form-label">
                 <Lock size={16} />
