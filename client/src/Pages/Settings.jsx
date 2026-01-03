@@ -1,20 +1,22 @@
 import { useState, useEffect } from "react";
-import ConfirmationModal from "../components/ConfirmationModal.jsx";
-import Toast from "../components/Toast.jsx";
+import ConfirmationModal from "../Components/ConfirmationModal.jsx";
+import Toast from "../Components/Toast.jsx";
+import { userAPI } from "../services/api";
 
-// Mock user for skeleton UI
-const mockCurrentUser = { id: 1, name: "Admin", role: "admin" };
+// Get current user from localStorage
+const getCurrentUser = () => {
+  const userData = localStorage.getItem("user");
+  if (userData) {
+    return JSON.parse(userData);
+  }
+  return { id: 1, name: "Admin", role: "ADMIN" };
+};
 
 export default function Settings() {
-  const currentUser = mockCurrentUser;
+  const currentUser = getCurrentUser();
 
-  // Mock users data for skeleton UI
-  const [users, setUsers] = useState([
-    { id: 1, name: "John Doe", employee_id: "EMP001", email: "john@example.com", role: "admin", status: "active" },
-    { id: 2, name: "Jane Smith", employee_id: "EMP002", email: "jane@example.com", role: "hr", status: "active" },
-    { id: 3, name: "Bob Wilson", employee_id: "EMP003", email: "bob@example.com", role: "employee", status: "active" },
-  ]);
-  const [loading, setLoading] = useState(false);
+  const [users, setUsers] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [updatingUserId, setUpdatingUserId] = useState(null);
   const [confirmModal, setConfirmModal] = useState({
@@ -56,11 +58,15 @@ export default function Settings() {
     try {
       setLoading(true);
       setError(null);
-      const response = await api.get('/admin/users');
-      setUsers(response.data.users);
+      const response = await userAPI.getAllUsers();
+      if (response.data.success) {
+        setUsers(response.data.data || []);
+      } else {
+        setError(response.data.message || "Failed to fetch users");
+      }
     } catch (error) {
       console.error("Failed to fetch users:", error);
-      setError(error.response?.data?.msg || "Failed to fetch users. Please try again.");
+      setError(error.response?.data?.message || "Failed to fetch users. Please try again.");
     } finally {
       setLoading(false);
     }
@@ -87,7 +93,7 @@ export default function Settings() {
 
     try {
       setUpdatingUserId(userId);
-      const response = await api.put(`/admin/users/${userId}/role`, { role: newRole });
+      await userAPI.changeUserRole(userId, newRole);
 
       // Update local state with the updated user
       setUsers(
@@ -106,7 +112,7 @@ export default function Settings() {
       showToast(`${userName}'s role has been updated successfully!`, 'success');
     } catch (error) {
       console.error("Failed to update role:", error);
-      const errorMsg = error.response?.data?.msg || "Failed to update role. Please try again.";
+      const errorMsg = error.response?.data?.message || "Failed to update role. Please try again.";
 
       // Show error toast
       showToast(errorMsg, 'error');
@@ -150,7 +156,7 @@ export default function Settings() {
 
     try {
       setDeletingUserId(userId);
-      const response = await api.delete(`/admin/users/${userId}`);
+      await userAPI.deleteUser(userId);
 
       // Remove user from local state
       setUsers(users.filter(user => user.id !== userId));
@@ -159,21 +165,11 @@ export default function Settings() {
       setDeleteModal({ isOpen: false, userId: null, userName: null, userEmail: null, userRole: null });
       setDeleteConfirmText('');
 
-      // Show success toast with deletion stats
-      const stats = response.data.stats || {};
-      const statsMessage = Object.entries(stats)
-        .filter(([_, count]) => count > 0)
-        .map(([key, count]) => `${count} ${key}`)
-        .join(', ');
-
-      const message = statsMessage
-        ? `${userName} deleted successfully. Removed: ${statsMessage}`
-        : `${userName} deleted successfully`;
-
-      showToast(message, 'success');
+      // Show success toast
+      showToast(`${userName} deleted successfully`, 'success');
     } catch (error) {
       console.error("Failed to delete user:", error);
-      const errorMsg = error.response?.data?.msg || "Failed to delete user. Please try again.";
+      const errorMsg = error.response?.data?.message || "Failed to delete user. Please try again.";
 
       // Show error toast
       showToast(errorMsg, 'error');
@@ -188,10 +184,9 @@ export default function Settings() {
   };
 
   const roles = [
-    { value: "employee", label: "Employee" },
-    { value: "hr", label: "HR" },
-    { value: "payroll", label: "Payroll Officer" },
-    { value: "admin", label: "Admin" },
+    { value: "EMPLOYEE", label: "Employee" },
+    { value: "HR", label: "HR" },
+    { value: "ADMIN", label: "Admin" },
   ];
 
   if (loading) {
@@ -304,8 +299,11 @@ export default function Settings() {
                       </select>
                     </td>
                     <td className="px-6 py-4 text-center">
-                      <span className={`px-3 py-1 rounded-full text-xs font-medium ${user.status === 'active'
+                      <span className={`px-3 py-1 rounded-full text-xs font-medium ${
+                        user.status === 'ACTIVE' || user.status === 'active'
                           ? 'bg-green-100 text-green-700'
+                          : user.status === 'FIRST_LOGIN_PENDING'
+                          ? 'bg-yellow-100 text-yellow-700'
                           : 'bg-red-100 text-red-700'
                         }`}>
                         {user.status}
